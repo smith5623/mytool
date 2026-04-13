@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>我的 Electron 工具箱</title>
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        padding: 0;
+        background-color: #f4f7f6;
+        color: #333;
+        margin: 0;
+        display: flex; /* 使用 Flexbox 布局 */
+        height: 100vh; /* 填充整个视口高度 */
+      }
+      #app-header {
+        background-color: #2c3e50;
+        color: #ecf0f1;
+        padding: 15px 20px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+      }
+      #sidebar {
+        width: 200px;
+        background-color: #34495e;
+        color: #ecf0f1;
+        padding: 20px 0;
+        box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+      }
+      #sidebar h2 {
+        color: #ecf0f1;
+        text-align: center;
+        margin-top: 0;
+        margin-bottom: 30px;
+        font-size: 20px;
+      }
+      #sidebar ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      #sidebar ul li a {
+        display: block;
+        padding: 10px 20px;
+        color: #ecf0f1;
+        text-decoration: none;
+        transition: background-color 0.2s ease;
+      }
+      #sidebar ul li a:hover,
+      #sidebar ul li a.active {
+        background-color: #2c3e50;
+      }
+      #content-area {
+        flex-grow: 1; /* 占据剩余空间 */
+        padding: 20px;
+        overflow-y: auto; /* 内容溢出时可滚动 */
+      }
+      h1 {
+        color: #2c3e50;
+        margin-top: 0;
+        margin-bottom: 20px;
+        font-size: 24px;
+      }
+      h2 {
+        color: #34495e;
+        font-size: 20px;
+        border-bottom: 2px solid #ccc;
+        padding-bottom: 10px;
+        margin-top: 30px;
+        margin-bottom: 20px;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #34495e;
+      }
+      input[type="text"],
+      button {
+        padding: 10px 15px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        margin-bottom: 15px;
+        font-size: 14px;
+      }
+      input[type="text"] {
+        width: calc(100% - 30px);
+        box-sizing: border-box;
+      }
+      button {
+        background-color: #3498db;
+        color: white;
+        cursor: pointer;
+        border: none;
+        transition: background-color 0.2s ease;
+      }
+      button:hover {
+        background-color: #2980b9;
+      }
+      button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+      #status {
+        margin-top: 25px;
+        padding: 10px;
+        border-radius: 5px;
+        background-color: #e8f6f3;
+        color: #2c3e50;
+        font-weight: bold;
+        border: 1px solid #d1e7dd;
+      }
+      .status-message {
+        margin-top: 25px;
+        padding: 10px;
+        border-radius: 5px;
+        background-color: #e8f6f3;
+        color: #2c3e50;
+        font-weight: bold;
+        border: 1px solid #d1e7dd;
+      }
+      .status-message.error {
+        background-color: #f8d7da;
+        color: #721c24;
+        border-color: #f5c6cb;
+      }
+      .status-message.success {
+        background-color: #d4edda;
+        color: #155724;
+        border-color: #c3e6cb;
+      }
+
+      .tool-section {
+        display: none; /* 默认隐藏所有工具区 */
+      }
+      .tool-section.active {
+        display: block; /* 激活的工具区显示 */
+      }
+      #fileListOutput {
+        background-color: #eef;
+        padding: 10px;
+        border-radius: 5px;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="sidebar">
+      <h2>工具箱</h2>
+      <ul>
+        <li><a href="#" id="nav-string-replacer" class="active">文件/文件夹字符串替换</a></li>
+        <li><a href="#" id="nav-code-assistant">代码辅助工具</a></li>
+        <li><a href="#" id="nav-another-tool">另一个工具 (待添加)</a></li>
+      </ul>
+    </div>
+
+    <div id="content-area">
+      <div id="app-header">
+        <h1>我的 Electron 工具箱</h1>
+      </div>
+
+      <div id="string-replacer-tool" class="tool-section active">
+        <h2>文件/文件夹字符串替换工具</h2>
+
+        <div>
+          <label for="folderPath">选择文件夹:</label>
+          <input type="text" id="folderPath" readonly placeholder="点击按钮选择文件夹" />
+          <button id="selectFolderBtn">选择文件夹</button>
+        </div>
+
+        <div>
+          <label for="searchString">查找字符串:</label>
+          <input type="text" id="searchString" placeholder="输入要查找的字符串" />
+        </div>
+
+        <div>
+          <label for="replaceString">替换为 (留空表示删除):</label>
+          <input type="text" id="replaceString" placeholder="输入替换字符串" />
+        </div>
+
+        <button id="startRenameBtn">开始替换</button>
+
+        <div class="status-message"></div>
+      </div>
+
+      <div id="code-assistant-tool" class="tool-section">
+        <h2>代码辅助工具 - 文件列表生成</h2>
+        <div>
+          <label for="codeAssistantFolderPath">选择项目文件夹:</label>
+          <input type="text" id="codeAssistantFolderPath" readonly placeholder="点击按钮选择文件夹" />
+          <button id="selectCodeAssistantFolderBtn">选择文件夹</button>
+        </div>
+        <button id="generateFileListBtn">生成文件列表</button>
+        <div id="codeAssistantStatus" class="status-message"></div>
+        <h3>生成结果 (Markdown):</h3>
+        <pre id="fileListOutput"></pre>
+      </div>
+
+      <!-- 将来其他工具的 UI 会在这里添加 -->
+      <div id="another-tool-section" class="tool-section">
+        <h2>另一个工具</h2>
+        <p>这是另一个工具的占位符内容。</p>
+      </div>
+    </div>
+  </body>
+</html>
