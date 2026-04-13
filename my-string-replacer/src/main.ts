@@ -108,12 +108,67 @@ ipcMain.handle('file:rename', async (event, folderPath: string, searchString: st
   }
 });
 
-// IPC handler for saving markdown content to a file
-ipcMain.handle('file:saveMarkdown', async (event, markdownContent: string) => {
+// IPC handler for generating file list (now also saves it)
+ipcMain.handle('file:generateFileList', async (event, folderPath: string) => {
   try {
+    if (!folderPath) {
+      throw new Error('Folder path is not provided.');
+    }
+
+    const markdownOutput: string[] = [];
+    // Common Git-related files/folders to exclude
+    const gitIgnorePatterns = ['.git', '.gitignore', '.gitmodules', '.gitattributes', '.gitkeep', 'node_modules', 'dist'];
+
+    const isTextFile = (filePath: string): boolean => {
+      const textExtensions = ['.txt', '.md', '.js', '.ts', '.jsx', '.tsx', '.json', '.css', '.html', '.vue', '.py', '.java', '.c', '.cpp', '.h', '.hpp', '.go', '.rs', '.xml', '.yml', '.yaml', '.toml'];
+      const ext = path.extname(filePath).toLowerCase();
+      return textExtensions.includes(ext) || ext === ''; // Assume no extension implies text
+    };
+
+    const traverseAndCollectFiles = (currentPath: string, level: number = 0) => {
+      const filesAndDirs = fs.readdirSync(currentPath, { withFileTypes: true });
+
+      for (const item of filesAndDirs) {
+        const itemName = item.name;
+        const itemPath = path.join(currentPath, itemName);
+
+        // Exclude common ignored folders/files
+        if (gitIgnorePatterns.includes(itemName) || itemName.startsWith('.')) {
+          continue;
+        }
+
+        if (item.isDirectory()) {
+          markdownOutput.push(`${'#'.repeat(level + 2)} 文件夹: ${itemName} [${itemPath}]`);
+          traverseAndCollectFiles(itemPath, level + 1);
+        } else if (item.isFile()) {
+          markdownOutput.push(`${'#'.repeat(level + 2)} 文件: ${itemName}`);
+          markdownOutput.push(`- **绝对路径**: ${itemPath}`);
+          markdownOutput.push(`- **文件名**: ${itemName}`);
+          markdownOutput.push(`- **文件内容**:\n\`\`\`\n`); // Corrected backticks
+          try {
+            const stats = fs.statSync(itemPath);
+            if (stats.size > 1024 * 1024) { // Limit to 1MB
+              markdownOutput.push(`[文件过大，内容已省略 (大小: ${(stats.size / (1024 * 1024)).toFixed(2)} MB)]`);
+            } else if (!isTextFile(itemPath)) {
+              markdownOutput.push(`[二进制文件，内容已省略]`);
+            } else {
+              const content = fs.readFileSync(itemPath, 'utf-8');
+              markdownOutput.push(content);
+            }
+          } catch (readError) {
+            markdownOutput.push(`[无法读取文件内容: ${readError.message}]`);
+          }
+          markdownOutput.push(`\n\`\`\`\n`); // Corrected backticks
+        }
+      }
+    };
+
+    markdownOutput.push(`# 项目文件列表: ${folderPath}\n`);
+    traverseAndCollectFiles(folderPath);
+
     const { canceled, filePath } = await dialog.showSaveDialog({
-      title: '保存文件列表为 Markdown',
-      defaultPath: 'file_list.md',
+      title: '保存项目文件列表为 Markdown',
+      defaultPath: 'project_file_list.md',
       filters: [
         { name: 'Markdown Files', extensions: ['md'] },
         { name: 'All Files', extensions: ['*'] },
@@ -123,52 +178,10 @@ ipcMain.handle('file:saveMarkdown', async (event, markdownContent: string) => {
     if (canceled) {
       return { success: false, message: '用户取消保存。' };
     } else if (filePath) {
-      fs.writeFileSync(filePath, markdownContent, 'utf-8');
+      fs.writeFileSync(filePath, markdownOutput.join('\n'), 'utf-8');
       return { success: true, message: `文件已成功保存到: ${filePath}` };
     }
     return { success: false, message: '保存路径无效。' };
-  } catch (error) {
-    return { success: false, message: error.message };
-  }
-});
-
-// IPC handler for generating file list
-ipcMain.handle('file:generateFileList', async (event, folderPath: string) => {
-  try {
-    if (!folderPath) {
-      throw new Error('Folder path is not provided.');
-    }
-
-    const output: string[] = [];
-    // Common Git-related files/folders to exclude
-    const gitIgnorePatterns = ['.git', '.gitignore', '.gitmodules', '.gitattributes', '.gitkeep'];
-
-    const traverseAndCollectFiles = (currentPath: string, level: number = 0) => {
-      const filesAndDirs = fs.readdirSync(currentPath, { withFileTypes: true });
-
-      for (const item of filesAndDirs) {
-        const itemName = item.name;
-        const itemPath = path.join(currentPath, itemName);
-
-        // Exclude the .git directory and specific Git-related files
-        if ((itemName === '.git' && item.isDirectory()) || (gitIgnorePatterns.includes(itemName) && item.isFile())) {
-          continue;
-        }
-
-        const indent = '  '.repeat(level);
-        if (item.isDirectory()) {
-          output.push(`${indent}- ${itemName}/`);
-          traverseAndCollectFiles(itemPath, level + 1);
-        } else {
-          output.push(`${indent}- ${itemName}`);
-        }
-      }
-    };
-
-    output.push(`# 文件列表: ${folderPath}\n`);
-    traverseAndCollectFiles(folderPath);
-
-    return { success: true, markdown: output.join('\n') };
   } catch (error) {
     return { success: false, message: error.message };
   }

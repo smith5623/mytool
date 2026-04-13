@@ -7,7 +7,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('file:rename', folderPath, searchString, replaceString),
   generateFileList: (folderPath: string) =>
     ipcRenderer.invoke('file:generateFileList', folderPath),
-  saveMarkdown: (markdownContent: string) =>
-    ipcRenderer.invoke('file:saveMarkdown', markdownContent),
 });
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts

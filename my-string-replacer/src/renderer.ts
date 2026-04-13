@@ -3,7 +3,7 @@ declare global {
     electronAPI: {
       openDirectory: () => Promise<string | null>;
       renameFiles: (folderPath: string, searchString: string, replaceString: string) => Promise<{ success: boolean; message: string }>;
-      generateFileList: (folderPath: string) => Promise<{ success: boolean; markdown: string; message?: string }>;
+      generateFileList: (folderPath: string) => Promise<{ success: boolean; message: string }>;
     };
   }
 }
@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectCodeAssistantFolderBtn = document.getElementById('selectCodeAssistantFolderBtn') as HTMLButtonElement;
   const generateFileListBtn = document.getElementById('generateFileListBtn') as HTMLButtonElement;
   const codeAssistantStatusDiv = document.getElementById('codeAssistantStatus') as HTMLDivElement;
-  const fileListOutputPre = document.getElementById('fileListOutput') as HTMLPreElement;
 
   // 导航逻辑
   const navItems = document.querySelectorAll('#sidebar ul li a');
@@ -51,7 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
       stringReplacerStatusDiv.className = 'status-message';
       codeAssistantStatusDiv.textContent = '';
       codeAssistantStatusDiv.className = 'status-message';
-      fileListOutputPre.textContent = '';
     });
   });
 
@@ -126,7 +124,6 @@ document.addEventListener('DOMContentLoaded', () => {
       codeAssistantStatusDiv.textContent = '未选择项目文件夹。';
       codeAssistantStatusDiv.classList.add('error');
     }
-    fileListOutputPre.textContent = ''; // Clear previous output
   });
 
   generateFileListBtn.addEventListener('click', async () => {
@@ -138,27 +135,26 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    codeAssistantStatusDiv.textContent = '正在生成文件列表...';
+    codeAssistantStatusDiv.textContent = '正在生成并保存文件列表...';
     codeAssistantStatusDiv.className = 'status-message';
     generateFileListBtn.disabled = true;
 
     try {
       const result = await window.electronAPI.generateFileList(folderPath);
       if (result.success) {
-        codeAssistantStatusDiv.textContent = '文件列表生成成功。' + result.message ? ` (${result.message})` : '';
+        codeAssistantStatusDiv.textContent = result.message;
         codeAssistantStatusDiv.classList.add('success');
-        fileListOutputPre.textContent = result.markdown;
       } else {
-        codeAssistantStatusDiv.textContent = `生成失败: ${result.message}`;
+        codeAssistantStatusDiv.textContent = `生成并保存失败: ${result.message}`;
         codeAssistantStatusDiv.classList.add('error');
-        fileListOutputPre.textContent = '';
       }
     } catch (error) {
       codeAssistantStatusDiv.textContent = `发生未知错误: ${error.message}`;
       codeAssistantStatusDiv.classList.add('error');
-      fileListOutputPre.textContent = '';
     } finally {
       generateFileListBtn.disabled = false;
     }
   });
 });
+
+export {};
