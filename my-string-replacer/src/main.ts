@@ -139,6 +139,40 @@ type DownloadTask = {
   resolve: (result: BatchDownloadResult) => void;
 };
 
+type StatusKind = 'info' | 'success' | 'error';
+
+type ArchiveRuntimeState = {
+  isRunning: boolean;
+  selectedFolderPath: string;
+  latestProgress: ArchiveProgressPayload | null;
+  logs: string[];
+  stats: {
+    successfulArchives: number;
+    deletedArchives: number;
+    failedArchives: number;
+    extractedFiles: number;
+  };
+  statusMessage: string;
+  statusKind: StatusKind;
+};
+
+type DownloadRuntimeState = {
+  isRunning: boolean;
+  isPaused: boolean;
+  outputDir: string;
+  latestProgress: DownloadProgressPayload | null;
+  logs: string[];
+  stats: {
+    totalUrls: number;
+    successfulDownloads: number;
+    failedDownloads: number;
+    canceledDownloads: number;
+  };
+  statusMessage: string;
+  statusKind: StatusKind;
+  partialResults: DownloadItemResult[];
+};
+
 const ARCHIVE_EXTENSIONS = [
   '.zip',
   '.rar',
@@ -162,6 +196,36 @@ const DOWNLOAD_PREFERENCES_FILE = 'download-preferences.json';
 const DOWNLOAD_ARCHIVE_FILE = 'download-archive.txt';
 
 let currentDownloadTask: DownloadTask | null = null;
+let archiveRuntimeState: ArchiveRuntimeState = {
+  isRunning: false,
+  selectedFolderPath: '',
+  latestProgress: null,
+  logs: [],
+  stats: {
+    successfulArchives: 0,
+    deletedArchives: 0,
+    failedArchives: 0,
+    extractedFiles: 0,
+  },
+  statusMessage: '',
+  statusKind: 'info',
+};
+let downloadRuntimeState: DownloadRuntimeState = {
+  isRunning: false,
+  isPaused: false,
+  outputDir: '',
+  latestProgress: null,
+  logs: [],
+  stats: {
+    totalUrls: 0,
+    successfulDownloads: 0,
+    failedDownloads: 0,
+    canceledDownloads: 0,
+  },
+  statusMessage: '',
+  statusKind: 'info',
+  partialResults: [],
+};
 
 if (require('electron-squirrel-startup')) {
   app.quit();
@@ -198,6 +262,8 @@ app.on('activate', () => {
 });
 
 const getUserDataFilePath = (fileName: string): string => path.join(app.getPath('userData'), fileName);
+
+const appendRuntimeLog = (logs: string[], message: string, limit = 50): string[] => [...logs, message].slice(-limit);
 
 const getDefaultDownloadPreferences = (): DownloadPreferences => ({
   defaultDownloadDir: app.getPath('downloads'),
@@ -405,10 +471,20 @@ const isArchiveFile = (filePath: string): boolean => {
 };
 
 const sendArchiveProgress = (sender: Electron.WebContents, payload: ArchiveProgressPayload): void => {
+  archiveRuntimeState = {
+    ...archiveRuntimeState,
+    latestProgress: payload,
+    logs: appendRuntimeLog(archiveRuntimeState.logs, payload.message),
+  };
   sender.send('archive:progress', payload);
 };
 
 const sendDownloadProgress = (sender: Electron.WebContents, payload: DownloadProgressPayload): void => {
+  downloadRuntimeState = {
+    ...downloadRuntimeState,
+    latestProgress: payload,
+    logs: appendRuntimeLog(downloadRuntimeState.logs, payload.message, 80),
+  };
   sender.send('download:progress', payload);
 };
 
@@ -746,6 +822,21 @@ const finalizeDownloadTask = async (task: DownloadTask): Promise<void> => {
     results: orderedResults,
   };
 
+  downloadRuntimeState = {
+    ...downloadRuntimeState,
+    isRunning: false,
+    isPaused: false,
+    stats: {
+      totalUrls: result.totalUrls,
+      successfulDownloads,
+      failedDownloads,
+      canceledDownloads,
+    },
+    statusMessage: message,
+    statusKind: success ? 'success' : task.canceled ? 'error' : 'error',
+    partialResults: orderedResults,
+  };
+
   await appendDownloadHistory({
     id: `task-${Date.now()}`,
     createdAt: new Date().toISOString(),
@@ -856,12 +947,17 @@ const pumpDownloadQueue = async (task: DownloadTask): Promise<void> => {
 
     child.once('error', async (error) => {
       task.activeItems.delete(index);
-      task.results.set(index, {
+      const failedResult = {
         url,
         success: false,
         error: error.message,
         errorCategory: classifyDownloadError(error.message),
-      });
+      };
+      task.results.set(index, failedResult);
+      downloadRuntimeState = {
+        ...downloadRuntimeState,
+        partialResults: task.urls.map((_url, currentIndex) => task.results.get(currentIndex)).filter((item): item is DownloadItemResult => Boolean(item)),
+      };
       sendDownloadProgress(task.sender, {
         phase: 'error',
         itemIndex: index + 1,
@@ -895,6 +991,10 @@ const pumpDownloadQueue = async (task: DownloadTask): Promise<void> => {
           error: 'Canceled by user',
           errorCategory: '已取消',
         });
+        downloadRuntimeState = {
+          ...downloadRuntimeState,
+          partialResults: task.urls.map((_url, currentIndex) => task.results.get(currentIndex)).filter((item): item is DownloadItemResult => Boolean(item)),
+        };
         await finalizeDownloadTask(task);
         return;
       }
@@ -905,6 +1005,10 @@ const pumpDownloadQueue = async (task: DownloadTask): Promise<void> => {
           success: true,
           filePath: finalFilePath || undefined,
         });
+        downloadRuntimeState = {
+          ...downloadRuntimeState,
+          partialResults: task.urls.map((_url, currentIndex) => task.results.get(currentIndex)).filter((item): item is DownloadItemResult => Boolean(item)),
+        };
         sendDownloadProgress(task.sender, {
           phase: 'completed',
           itemIndex: index + 1,
@@ -923,6 +1027,10 @@ const pumpDownloadQueue = async (task: DownloadTask): Promise<void> => {
           error: errorMessage,
           errorCategory: classifyDownloadError(errorMessage),
         });
+        downloadRuntimeState = {
+          ...downloadRuntimeState,
+          partialResults: task.urls.map((_url, currentIndex) => task.results.get(currentIndex)).filter((item): item is DownloadItemResult => Boolean(item)),
+        };
         sendDownloadProgress(task.sender, {
           phase: 'error',
           itemIndex: index + 1,
@@ -1009,6 +1117,26 @@ ipcMain.handle('download:getState', async (): Promise<DownloadToolState> => {
   };
 });
 
+ipcMain.handle('archive:getRuntimeState', async (): Promise<ArchiveRuntimeState> => archiveRuntimeState);
+
+ipcMain.handle('download:getRuntimeState', async (): Promise<DownloadRuntimeState> => {
+  if (currentDownloadTask) {
+    const orderedPartialResults = currentDownloadTask.urls
+      .map((_url, index) => currentDownloadTask?.results.get(index))
+      .filter((item): item is DownloadItemResult => Boolean(item));
+
+    return {
+      ...downloadRuntimeState,
+      isRunning: true,
+      isPaused: currentDownloadTask.paused,
+      outputDir: currentDownloadTask.options.outputDir,
+      partialResults: orderedPartialResults,
+    };
+  }
+
+  return downloadRuntimeState;
+});
+
 ipcMain.handle('download:savePreferences', async (_event, preferences: DownloadPreferences): Promise<SimpleResult> => {
   await saveDownloadPreferences(preferences);
   return {
@@ -1080,6 +1208,23 @@ ipcMain.handle('download:batch', async (event, rawUrls: string, options: Downloa
   await saveDownloadPreferences(preferences);
   await ensureParentDirectory(getDownloadArchiveFilePath());
 
+  downloadRuntimeState = {
+    isRunning: true,
+    isPaused: false,
+    outputDir: options.outputDir,
+    latestProgress: null,
+    logs: [],
+    stats: {
+      totalUrls: urls.length,
+      successfulDownloads: 0,
+      failedDownloads: 0,
+      canceledDownloads: 0,
+    },
+    statusMessage: '正在准备批量下载...',
+    statusKind: 'info',
+    partialResults: [],
+  };
+
   const task = createDownloadTask(event.sender, urls, options);
   currentDownloadTask = task;
   void pumpDownloadQueue(task);
@@ -1096,6 +1241,13 @@ ipcMain.handle('download:pause', async (): Promise<SimpleResult> => {
   }
 
   currentDownloadTask.paused = true;
+  downloadRuntimeState = {
+    ...downloadRuntimeState,
+    isRunning: true,
+    isPaused: true,
+    statusMessage: '下载队列已暂停。',
+    statusKind: 'success',
+  };
   currentDownloadTask.activeItems.forEach((item) => {
     item.control = 'pause';
     item.child.kill();
@@ -1114,6 +1266,13 @@ ipcMain.handle('download:resume', async (): Promise<SimpleResult> => {
   }
 
   currentDownloadTask.paused = false;
+  downloadRuntimeState = {
+    ...downloadRuntimeState,
+    isRunning: true,
+    isPaused: false,
+    statusMessage: '下载队列已继续。',
+    statusKind: 'success',
+  };
   void pumpDownloadQueue(currentDownloadTask);
   return { success: true, message: '下载队列已继续。' };
 });
@@ -1124,6 +1283,13 @@ ipcMain.handle('download:cancel', async (): Promise<SimpleResult> => {
   }
 
   currentDownloadTask.canceled = true;
+  downloadRuntimeState = {
+    ...downloadRuntimeState,
+    isRunning: true,
+    isPaused: false,
+    statusMessage: '下载任务正在取消...',
+    statusKind: 'error',
+  };
   currentDownloadTask.pendingIndexes.forEach((index) => {
     const url = currentDownloadTask?.urls[index];
     if (!url || !currentDownloadTask) {
@@ -1314,6 +1480,21 @@ ipcMain.handle('archive:extractAll', async (event, folderPath: string): Promise<
   }
 
   try {
+    archiveRuntimeState = {
+      isRunning: true,
+      selectedFolderPath: folderPath,
+      latestProgress: null,
+      logs: [],
+      stats: {
+        successfulArchives: 0,
+        deletedArchives: 0,
+        failedArchives: 0,
+        extractedFiles: 0,
+      },
+      statusMessage: '正在扫描压缩文件...',
+      statusKind: 'info',
+    };
+
     sendArchiveProgress(event.sender, {
       phase: 'scanning',
       archiveIndex: 0,
@@ -1399,9 +1580,29 @@ ipcMain.handle('archive:extractAll', async (event, folderPath: string): Promise<
         await fs.promises.unlink(archivePath);
         deletedArchives += 1;
         processedArchives += 1;
+        archiveRuntimeState = {
+          ...archiveRuntimeState,
+          stats: {
+            successfulArchives: processedArchives,
+            deletedArchives,
+            failedArchives: failures.length,
+            extractedFiles,
+          },
+        };
       } catch (error) {
         const reason = (error as Error).message;
         failures.push({ archivePath, reason });
+        archiveRuntimeState = {
+          ...archiveRuntimeState,
+          stats: {
+            successfulArchives: processedArchives,
+            deletedArchives,
+            failedArchives: failures.length,
+            extractedFiles,
+          },
+          statusMessage: `解压失败: ${path.basename(archivePath)} - ${reason}`,
+          statusKind: 'error',
+        };
         sendArchiveProgress(event.sender, {
           phase: 'error',
           archiveIndex,
@@ -1418,6 +1619,18 @@ ipcMain.handle('archive:extractAll', async (event, folderPath: string): Promise<
     const message = success
       ? `解压完成，共处理 ${processedArchives} 个压缩包，提取 ${extractedFiles} 个文件。`
       : `解压完成。成功 ${processedArchives} 个，失败 ${failures.length} 个，提取 ${extractedFiles} 个文件。`;
+
+    archiveRuntimeState = {
+      ...archiveRuntimeState,
+      stats: {
+        successfulArchives: processedArchives,
+        deletedArchives,
+        failedArchives: failures.length,
+        extractedFiles,
+      },
+      statusMessage: message,
+      statusKind: success ? 'success' : 'error',
+    };
 
     sendArchiveProgress(event.sender, {
       phase: 'done',
@@ -1438,6 +1651,12 @@ ipcMain.handle('archive:extractAll', async (event, folderPath: string): Promise<
     };
   } catch (error) {
     const message = (error as Error).message;
+    archiveRuntimeState = {
+      ...archiveRuntimeState,
+      isRunning: false,
+      statusMessage: message,
+      statusKind: 'error',
+    };
     sendArchiveProgress(event.sender, {
       phase: 'error',
       archiveIndex: 0,
@@ -1453,6 +1672,13 @@ ipcMain.handle('archive:extractAll', async (event, folderPath: string): Promise<
       totalArchives: 0,
       extractedFiles: 0,
       failures: [],
+    };
+  } finally {
+    archiveRuntimeState = {
+      ...archiveRuntimeState,
+      isRunning: false,
+      statusMessage: archiveRuntimeState.statusMessage || '解压任务已结束。',
+      statusKind: archiveRuntimeState.statusKind,
     };
   }
 });

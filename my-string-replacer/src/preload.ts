@@ -105,6 +105,38 @@ type DownloadToolState = {
   history: DownloadHistoryEntry[];
 };
 
+type ArchiveRuntimeState = {
+  isRunning: boolean;
+  selectedFolderPath: string;
+  latestProgress: ArchiveProgressPayload | null;
+  logs: string[];
+  stats: {
+    successfulArchives: number;
+    deletedArchives: number;
+    failedArchives: number;
+    extractedFiles: number;
+  };
+  statusMessage: string;
+  statusKind: 'info' | 'success' | 'error';
+};
+
+type DownloadRuntimeState = {
+  isRunning: boolean;
+  isPaused: boolean;
+  outputDir: string;
+  latestProgress: DownloadProgressPayload | null;
+  logs: string[];
+  stats: {
+    totalUrls: number;
+    successfulDownloads: number;
+    failedDownloads: number;
+    canceledDownloads: number;
+  };
+  statusMessage: string;
+  statusKind: 'info' | 'success' | 'error';
+  partialResults: DownloadItemResult[];
+};
+
 contextBridge.exposeInMainWorld('electronAPI', {
   openDirectory: () => ipcRenderer.invoke('dialog:openDirectory') as Promise<string | null>,
   openTextFile: () => ipcRenderer.invoke('dialog:openTextFile') as Promise<string | null>,
@@ -116,7 +148,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('file:generateFileList', folderPath) as Promise<SimpleResult>,
   extractArchives: (folderPath: string) =>
     ipcRenderer.invoke('archive:extractAll', folderPath) as Promise<BatchExtractResult>,
+  getArchiveRuntimeState: () => ipcRenderer.invoke('archive:getRuntimeState') as Promise<ArchiveRuntimeState>,
   getDownloadState: () => ipcRenderer.invoke('download:getState') as Promise<DownloadToolState>,
+  getDownloadRuntimeState: () => ipcRenderer.invoke('download:getRuntimeState') as Promise<DownloadRuntimeState>,
   saveDownloadPreferences: (preferences: DownloadPreferences) =>
     ipcRenderer.invoke('download:savePreferences', preferences) as Promise<SimpleResult>,
   precheckDownloads: (

@@ -103,6 +103,38 @@ type DownloadToolState = {
   history: DownloadHistoryEntry[];
 };
 
+type ArchiveRuntimeState = {
+  isRunning: boolean;
+  selectedFolderPath: string;
+  latestProgress: ArchiveProgressPayload | null;
+  logs: string[];
+  stats: {
+    successfulArchives: number;
+    deletedArchives: number;
+    failedArchives: number;
+    extractedFiles: number;
+  };
+  statusMessage: string;
+  statusKind: 'info' | 'success' | 'error';
+};
+
+type DownloadRuntimeState = {
+  isRunning: boolean;
+  isPaused: boolean;
+  outputDir: string;
+  latestProgress: DownloadProgressPayload | null;
+  logs: string[];
+  stats: {
+    totalUrls: number;
+    successfulDownloads: number;
+    failedDownloads: number;
+    canceledDownloads: number;
+  };
+  statusMessage: string;
+  statusKind: 'info' | 'success' | 'error';
+  partialResults: DownloadItemResult[];
+};
+
 declare global {
   interface Window {
     electronAPI: {
@@ -113,7 +145,9 @@ declare global {
       renameFiles: (folderPath: string, searchString: string, replaceString: string) => Promise<SimpleResult>;
       generateFileList: (folderPath: string) => Promise<SimpleResult>;
       extractArchives: (folderPath: string) => Promise<BatchExtractResult>;
+      getArchiveRuntimeState: () => Promise<ArchiveRuntimeState>;
       getDownloadState: () => Promise<DownloadToolState>;
+      getDownloadRuntimeState: () => Promise<DownloadRuntimeState>;
       saveDownloadPreferences: (preferences: DownloadPreferences) => Promise<SimpleResult>;
       precheckDownloads: (
         rawUrls: string,
@@ -203,11 +237,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let lastDownloadResult: BatchDownloadResult | null = null;
   let lastFailedUrls: string[] = [];
-
-  const clearStatus = (element: HTMLDivElement): void => {
-    element.textContent = '';
-    element.className = 'status-message';
-  };
 
   const showStatus = (element: HTMLDivElement, message: string, kind: 'success' | 'error' | 'info' = 'info'): void => {
     element.textContent = message;
@@ -360,6 +389,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   };
 
+  const renderDownloadPartialResults = (results: DownloadItemResult[]): void => {
+    renderDownloadResults({
+      success: false,
+      message: '',
+      totalUrls: results.length,
+      successfulDownloads: results.filter((item) => item.success).length,
+      failedDownloads: results.filter((item) => !item.success && item.errorCategory !== '已取消').length,
+      canceledDownloads: results.filter((item) => item.errorCategory === '已取消').length,
+      results,
+    });
+  };
+
   const updateDownloadStats = (result: BatchDownloadResult): void => {
     douyinSuccessCount.textContent = String(result.successfulDownloads);
     douyinFailureCount.textContent = String(result.failedDownloads);
@@ -371,16 +412,74 @@ document.addEventListener('DOMContentLoaded', async () => {
     await window.electronAPI.saveDownloadPreferences(readDownloadPreferencesFromForm());
   };
 
+  const applyArchiveRuntimeState = async (): Promise<void> => {
+    const state = await window.electronAPI.getArchiveRuntimeState();
+    if (state.selectedFolderPath) {
+      archiveFolderPathInput.value = state.selectedFolderPath;
+    }
+    archiveSuccessCount.textContent = String(state.stats.successfulArchives);
+    archiveDeletedCount.textContent = String(state.stats.deletedArchives);
+    archiveFailureCount.textContent = String(state.stats.failedArchives);
+    archiveExtractedCount.textContent = String(state.stats.extractedFiles);
+    archiveLog.textContent = state.logs.join('\n');
+    if (state.latestProgress) {
+      const overallPercent = state.latestProgress.totalArchives > 0
+        ? ((Math.max(state.latestProgress.archiveIndex - 1, 0) + (state.latestProgress.archivePercent ?? 0) / 100) / state.latestProgress.totalArchives) * 100
+        : state.latestProgress.phase === 'done'
+          ? 100
+          : 0;
+      archiveProgressBar.value = Math.max(0, Math.min(100, overallPercent));
+      archiveProgressText.textContent = state.latestProgress.message;
+    }
+    if (state.statusMessage) {
+      showStatus(archiveStatusDiv, state.statusMessage, state.statusKind);
+    }
+    extractArchivesBtn.disabled = state.isRunning;
+  };
+
+  const applyDownloadRuntimeState = async (): Promise<void> => {
+    const state = await window.electronAPI.getDownloadRuntimeState();
+    if (state.outputDir) {
+      douyinOutputPathInput.value = state.outputDir;
+    }
+    douyinSuccessCount.textContent = String(state.stats.successfulDownloads);
+    douyinFailureCount.textContent = String(state.stats.failedDownloads);
+    douyinCanceledCount.textContent = String(state.stats.canceledDownloads);
+    douyinTotalCount.textContent = String(state.stats.totalUrls);
+    douyinLog.textContent = state.logs.join('\n');
+    renderDownloadPartialResults(state.partialResults);
+    if (state.latestProgress) {
+      const overallPercent = state.latestProgress.totalItems > 0
+        ? ((Math.max(state.latestProgress.itemIndex - 1, 0) + (state.latestProgress.percent ?? 0) / 100) / state.latestProgress.totalItems) * 100
+        : state.latestProgress.phase === 'done'
+          ? 100
+          : 0;
+      douyinProgressBar.value = Math.max(0, Math.min(100, overallPercent));
+      douyinProgressText.textContent = state.latestProgress.message;
+    }
+    if (state.statusMessage) {
+      showStatus(douyinStatusDiv, state.statusMessage, state.statusKind);
+    }
+    startDouyinDownloadBtn.disabled = state.isRunning;
+    pauseDownloadBtn.disabled = !state.isRunning || state.isPaused;
+    resumeDownloadBtn.disabled = !state.isRunning || !state.isPaused;
+    cancelDownloadBtn.disabled = !state.isRunning;
+    openDownloadFolderBtn.disabled = !douyinOutputPathInput.value.trim();
+  };
+
   navItems.forEach((item) => {
     item.addEventListener('click', (event) => {
       event.preventDefault();
       navItems.forEach((nav) => nav.classList.remove('active'));
       item.classList.add('active');
-      showToolSection(`${item.id.replace('nav-', '')}-tool`);
-      clearStatus(stringReplacerStatusDiv);
-      clearStatus(codeAssistantStatusDiv);
-      clearStatus(archiveStatusDiv);
-      clearStatus(douyinStatusDiv);
+      const sectionId = `${item.id.replace('nav-', '')}-tool`;
+      showToolSection(sectionId);
+      if (sectionId === 'archive-extractor-tool') {
+        void applyArchiveRuntimeState();
+      }
+      if (sectionId === 'douyin-downloader-tool') {
+        void applyDownloadRuntimeState();
+      }
     });
   });
 
@@ -719,6 +818,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   resetArchiveProgress();
   resetDownloadProgress();
+  await applyArchiveRuntimeState();
+  await applyDownloadRuntimeState();
 
   window.addEventListener('beforeunload', () => {
     unsubscribeArchiveProgress();
