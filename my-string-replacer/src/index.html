@@ -94,9 +94,19 @@
         padding: 24px;
       }
 
+      .panel + .panel {
+        margin-top: 16px;
+      }
+
       .panel h2 {
         margin: 0 0 8px;
         font-size: 22px;
+        color: #162032;
+      }
+
+      .panel h3 {
+        margin: 0 0 10px;
+        font-size: 18px;
         color: #162032;
       }
 
@@ -118,6 +128,20 @@
         min-width: 0;
       }
 
+      .field-half {
+        flex: 0 0 calc(50% - 6px);
+      }
+
+      .field-third {
+        flex: 0 0 calc(33.333% - 8px);
+      }
+
+      .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
       label {
         display: block;
         margin-bottom: 8px;
@@ -125,7 +149,10 @@
         color: #243447;
       }
 
-      input[type='text'] {
+      input[type='text'],
+      input[type='number'],
+      select,
+      textarea {
         width: 100%;
         min-height: 42px;
         padding: 10px 12px;
@@ -133,6 +160,12 @@
         border: 1px solid #c6d3df;
         font-size: 14px;
         background: #fff;
+        font-family: inherit;
+      }
+
+      textarea {
+        min-height: 180px;
+        resize: vertical;
       }
 
       .button-row {
@@ -157,6 +190,30 @@
 
       button:hover {
         background: #2167c7;
+      }
+
+      button.secondary {
+        background: #516174;
+      }
+
+      button.secondary:hover {
+        background: #3e4d5d;
+      }
+
+      button.warn {
+        background: #f39c12;
+      }
+
+      button.warn:hover {
+        background: #d88909;
+      }
+
+      button.danger {
+        background: #d74b4b;
+      }
+
+      button.danger:hover {
+        background: #ba3434;
       }
 
       button:disabled {
@@ -203,8 +260,8 @@
 
       .log-box {
         margin-top: 14px;
-        min-height: 160px;
-        max-height: 220px;
+        min-height: 180px;
+        max-height: 260px;
         overflow: auto;
         padding: 12px;
         border-radius: 6px;
@@ -215,6 +272,169 @@
         line-height: 1.5;
         white-space: pre-wrap;
         word-break: break-word;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .stats-card {
+        border: 1px solid #d9e2ec;
+        border-radius: 6px;
+        padding: 12px;
+        background: #f8fbff;
+      }
+
+      .stats-label {
+        color: #5b6b7d;
+        font-size: 13px;
+      }
+
+      .stats-value {
+        margin-top: 6px;
+        color: #162032;
+        font-size: 24px;
+        font-weight: 700;
+      }
+
+      .checkbox-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 12px;
+        margin-top: 8px;
+      }
+
+      .check-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 40px;
+        padding: 8px 10px;
+        border: 1px solid #d9e2ec;
+        border-radius: 6px;
+        background: #fbfdff;
+      }
+
+      .check-item input {
+        width: 16px;
+        height: 16px;
+      }
+
+      .meta-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 10px 12px;
+        border-radius: 6px;
+        background: #f5f8fc;
+        color: #46576a;
+        font-size: 14px;
+      }
+
+      .table-shell {
+        overflow: auto;
+        border: 1px solid #d9e2ec;
+        border-radius: 6px;
+        background: #fff;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 760px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid #e7edf4;
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+        font-size: 14px;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        background: #f8fbff;
+        z-index: 1;
+      }
+
+      .cell-wrap {
+        word-break: break-word;
+      }
+
+      .table-empty,
+      .empty-state {
+        color: #708092;
+        padding: 16px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 0 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .pill.success {
+        background: #e9f8ef;
+        color: #18663f;
+      }
+
+      .pill.error {
+        background: #fdeeee;
+        color: #a12424;
+      }
+
+      .pill.warn {
+        background: #fff3dd;
+        color: #8f5b00;
+      }
+
+      .history-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .history-item {
+        padding: 12px;
+        border: 1px solid #d9e2ec;
+        border-radius: 6px;
+        background: #fbfdff;
+      }
+
+      .history-title {
+        color: #162032;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+
+      .history-meta {
+        color: #5b6b7d;
+        font-size: 14px;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @media (max-width: 1200px) {
+        .stats-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .settings-grid,
+        .checkbox-grid {
+          grid-template-columns: 1fr;
+        }
       }
 
       @media (max-width: 900px) {
@@ -230,6 +450,10 @@
           flex-direction: column;
           align-items: stretch;
         }
+
+        .stats-grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -240,6 +464,7 @@
         <li><a href="#" id="nav-string-replacer" class="active">批量重命名</a></li>
         <li><a href="#" id="nav-code-assistant">文件列表导出</a></li>
         <li><a href="#" id="nav-archive-extractor">批量解压文件</a></li>
+        <li><a href="#" id="nav-douyin-downloader">抖音批量下载</a></li>
       </ul>
     </aside>
 
@@ -325,7 +550,205 @@
             <div id="archiveLog" class="log-box"></div>
           </div>
 
+          <div class="stats-grid">
+            <div class="stats-card">
+              <div class="stats-label">成功解压压缩包</div>
+              <div class="stats-value" id="archiveSuccessCount">0</div>
+            </div>
+            <div class="stats-card">
+              <div class="stats-label">已删除源文件</div>
+              <div class="stats-value" id="archiveDeletedCount">0</div>
+            </div>
+            <div class="stats-card">
+              <div class="stats-label">解压失败压缩包</div>
+              <div class="stats-value" id="archiveFailureCount">0</div>
+            </div>
+            <div class="stats-card">
+              <div class="stats-label">提取出的文件数</div>
+              <div class="stats-value" id="archiveExtractedCount">--</div>
+            </div>
+          </div>
+
           <div id="archiveStatus" class="status-message"></div>
+        </div>
+      </section>
+
+      <section id="douyin-downloader-tool" class="tool-section">
+        <div class="panel">
+          <h2>抖音批量下载</h2>
+          <p>逐行粘贴链接，选择本地保存目录后，可以预检查、批量下载、暂停继续、取消、失败重试，并导出结果报告。</p>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="douyinLinksInput">抖音视频链接</label>
+              <textarea id="douyinLinksInput" placeholder="每行一个链接&#10;https://v.douyin.com/...&#10;https://www.douyin.com/video/..."></textarea>
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button id="importLinksBtn" class="secondary">从 TXT 导入链接</button>
+            <button id="precheckBtn" class="secondary">预检查链接</button>
+            <button id="startDouyinDownloadBtn">开始批量下载</button>
+            <button id="pauseDownloadBtn" class="warn" disabled>暂停</button>
+            <button id="resumeDownloadBtn" class="secondary" disabled>继续</button>
+            <button id="cancelDownloadBtn" class="danger" disabled>取消任务</button>
+            <button id="retryFailedBtn" class="secondary" disabled>仅重试失败项</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>下载设置</h3>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="douyinOutputPath">下载保存目录</label>
+              <input type="text" id="douyinOutputPath" readonly placeholder="点击右侧按钮选择保存目录" />
+            </div>
+            <button id="selectDouyinOutputBtn">选择目录</button>
+            <button id="openDownloadFolderBtn" class="secondary">打开目录</button>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="cookieFilePath">Cookie 文件</label>
+              <input type="text" id="cookieFilePath" readonly placeholder="需要登录内容时可以导入 Cookie 文件" />
+            </div>
+            <button id="selectCookieFileBtn">选择 Cookie</button>
+            <button id="clearCookieFileBtn" class="secondary">清空 Cookie</button>
+          </div>
+
+          <div class="settings-grid">
+            <div class="field">
+              <label for="concurrencyInput">并发下载数</label>
+              <input type="number" id="concurrencyInput" min="1" max="8" value="2" />
+            </div>
+            <div class="field">
+              <label for="namingPresetSelect">文件命名规则</label>
+              <select id="namingPresetSelect">
+                <option value="title-id">标题 + ID</option>
+                <option value="author-title-id">作者 + 标题 + ID</option>
+                <option value="date-author-title">日期 + 作者 + 标题</option>
+                <option value="custom">自定义模板</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="socketTimeoutInput">超时（秒）</label>
+              <input type="number" id="socketTimeoutInput" min="0" value="30" />
+            </div>
+            <div class="field">
+              <label for="retryCountInput">失败重试次数</label>
+              <input type="number" id="retryCountInput" min="0" value="3" />
+            </div>
+            <div class="field">
+              <label for="limitRateInput">限速（例如 2M / 800K）</label>
+              <input type="text" id="limitRateInput" placeholder="留空表示不限速" />
+            </div>
+            <div class="field">
+              <label for="proxyInput">代理</label>
+              <input type="text" id="proxyInput" placeholder="http://127.0.0.1:7890" />
+            </div>
+          </div>
+
+          <div id="customTemplateRow" class="field hidden">
+            <label for="customTemplateInput">自定义模板</label>
+            <input type="text" id="customTemplateInput" placeholder="例如 %(title)s [%(id)s].%(ext)s" />
+          </div>
+
+          <div class="checkbox-grid">
+            <label class="check-item"><input type="checkbox" id="includeThumbnail" />下载封面</label>
+            <label class="check-item"><input type="checkbox" id="includeDescription" />下载文案</label>
+            <label class="check-item"><input type="checkbox" id="includeSubtitles" />下载字幕</label>
+            <label class="check-item"><input type="checkbox" id="dedupeLinks" checked />自动去重</label>
+            <label class="check-item"><input type="checkbox" id="skipExisting" checked />跳过已存在文件</label>
+          </div>
+
+          <div class="meta-row">
+            <div id="ytDlpVersionText">yt-dlp 版本：--</div>
+            <div id="ytDlpVersionHint">--</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>任务进度</h3>
+
+          <div class="progress-wrap">
+            <progress id="douyinProgressBar" max="100" value="0"></progress>
+            <div id="douyinProgressText" class="progress-text">等待开始</div>
+            <div id="douyinLog" class="log-box"></div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stats-card">
+              <div class="stats-label">成功下载</div>
+              <div class="stats-value" id="douyinSuccessCount">0</div>
+            </div>
+            <div class="stats-card">
+              <div class="stats-label">下载失败</div>
+              <div class="stats-value" id="douyinFailureCount">0</div>
+            </div>
+            <div class="stats-card">
+              <div class="stats-label">已取消</div>
+              <div class="stats-value" id="douyinCanceledCount">0</div>
+            </div>
+            <div class="stats-card">
+              <div class="stats-label">本次总链接数</div>
+              <div class="stats-value" id="douyinTotalCount">0</div>
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button id="exportCsvBtn" class="secondary" disabled>导出 CSV 报告</button>
+            <button id="exportTxtBtn" class="secondary" disabled>导出 TXT 报告</button>
+          </div>
+
+          <div id="douyinStatus" class="status-message"></div>
+        </div>
+
+        <div class="panel">
+          <h3>预检查结果</h3>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>状态</th>
+                  <th>标题</th>
+                  <th>作者</th>
+                  <th>时长</th>
+                  <th>详情</th>
+                </tr>
+              </thead>
+              <tbody id="precheckTableBody">
+                <tr><td colspan="5" class="table-empty">还没有预检查结果。</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>下载结果</h3>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>状态</th>
+                  <th>链接</th>
+                  <th>文件路径</th>
+                  <th>错误类型</th>
+                  <th>错误详情</th>
+                </tr>
+              </thead>
+              <tbody id="resultTableBody">
+                <tr><td colspan="5" class="table-empty">还没有下载结果。</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>最近历史</h3>
+          <div id="historyList" class="history-list">
+            <div class="empty-state">还没有下载历史。</div>
+          </div>
         </div>
       </section>
     </main>

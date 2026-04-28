@@ -30,6 +30,8 @@
 
 # Executables
 *.exe
+!my-string-replacer/resources/7zip/win/x64/7za.exe
+!my-string-replacer/resources/yt-dlp/win/x64/yt-dlp.exe
 *.out
 *.app
 *.i*86

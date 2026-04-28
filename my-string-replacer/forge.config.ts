@@ -13,9 +13,8 @@ import { rendererConfig } from './webpack.renderer.config';
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: {
-      unpack: '**/node_modules/7zip-bin/**/*',
-    },
+    asar: true,
+    extraResource: ['./resources/7zip', './resources/yt-dlp'],
   },
   rebuildConfig: {},
   makers: [
