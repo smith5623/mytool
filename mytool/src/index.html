@@ -150,6 +150,7 @@
       }
 
       input[type='text'],
+      input[type='password'],
       input[type='number'],
       select,
       textarea {
@@ -422,6 +423,100 @@
         font-size: 14px;
       }
 
+      .stats-value-small {
+        font-size: 16px;
+        line-height: 1.5;
+        word-break: break-word;
+      }
+
+      .result-block {
+        border: 1px solid #d9e2ec;
+        border-radius: 8px;
+        background: #fbfdff;
+        padding: 16px;
+      }
+
+      .result-block + .result-block {
+        margin-top: 14px;
+      }
+
+      .result-title-row {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .result-title-row h4 {
+        margin: 0;
+        font-size: 17px;
+        color: #162032;
+      }
+
+      .result-title-row code {
+        display: block;
+        padding: 10px 12px;
+        border-radius: 6px;
+        background: #101923;
+        color: #d6e2ee;
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .result-pre {
+        margin: 0;
+        padding: 14px;
+        border-radius: 6px;
+        background: #101923;
+        color: #d6e2ee;
+        font-family: Consolas, 'Courier New', monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow: auto;
+      }
+
+      .alerts-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .alert-card {
+        border: 1px solid #d9e2ec;
+        border-radius: 8px;
+        padding: 14px;
+        background: #fbfdff;
+      }
+
+      .alert-card.info {
+        background: #eef6ff;
+        border-color: #c9defa;
+      }
+
+      .alert-card.warning {
+        background: #fff7e8;
+        border-color: #f2d5a0;
+      }
+
+      .alert-card.error {
+        background: #fdeeee;
+        border-color: #efc2c2;
+      }
+
+      .alert-title {
+        font-weight: 700;
+        color: #162032;
+        margin-bottom: 6px;
+      }
+
+      .alert-detail {
+        color: #435468;
+        line-height: 1.6;
+      }
+
       .hidden {
         display: none;
       }
@@ -432,7 +527,8 @@
         }
 
         .settings-grid,
-        .checkbox-grid {
+        .checkbox-grid,
+        .alerts-grid {
           grid-template-columns: 1fr;
         }
       }
@@ -464,6 +560,8 @@
         <li><a href="#" id="nav-string-replacer" class="active">批量重命名</a></li>
         <li><a href="#" id="nav-code-assistant">文件列表导出</a></li>
         <li><a href="#" id="nav-archive-extractor">批量解压文件</a></li>
+        <li><a href="#" id="nav-local-inspector">本机硬件检测</a></li>
+        <li><a href="#" id="nav-linux-inspector">Linux 服务器巡检</a></li>
         <li><a href="#" id="nav-douyin-downloader">抖音批量下载</a></li>
       </ul>
     </aside>
@@ -570,6 +668,113 @@
           </div>
 
           <div id="archiveStatus" class="status-message"></div>
+        </div>
+      </section>
+
+      <section id="local-inspector-tool" class="tool-section">
+        <div class="panel">
+          <h2>本机硬件检测</h2>
+          <p>在 Windows 或 macOS 本机运行时，一键检测系统、CPU、内存、硬盘和显卡信息，方便快速查看当前电脑配置。</p>
+
+          <div class="button-row">
+            <button id="localInspectBtn">开始检测</button>
+            <button id="localCopyReportBtn" class="secondary" disabled>复制报告</button>
+            <button id="localExportTxtBtn" class="secondary" disabled>导出 TXT</button>
+            <button id="localExportJsonBtn" class="secondary" disabled>导出 JSON</button>
+          </div>
+
+          <div id="localStatus" class="status-message"></div>
+        </div>
+
+        <div class="panel">
+          <h3>评分与建议</h3>
+          <div class="stats-grid">
+            <div class="stats-card">
+              <div class="stats-label">综合评分</div>
+              <div class="stats-value" id="localScoreValue">--</div>
+              <div class="history-meta" id="localScoreLabel">等待检测</div>
+            </div>
+            <div class="stats-card" style="grid-column: span 3;">
+              <div class="stats-label">评分依据</div>
+              <div id="localScoreBreakdown" class="history-list" style="margin-top: 10px;">
+                <div class="empty-state">完成检测后，这里会拆分显示评分依据。</div>
+              </div>
+            </div>
+          </div>
+          <div id="localInsights" class="alerts-grid" style="margin-top: 16px;">
+            <div class="empty-state">完成检测后，这里会显示异常提示和建议项。</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>检测摘要</h3>
+          <div class="meta-row">
+            <div>最近检测时间</div>
+            <div id="localLastChecked">--</div>
+          </div>
+          <div id="localSummaryGrid" class="stats-grid">
+            <div class="empty-state">点击“开始检测”后，这里会显示本机的 CPU、内存、硬盘、显卡和系统信息。</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>详细输出</h3>
+          <div id="localSections"></div>
+        </div>
+      </section>
+
+      <section id="linux-inspector-tool" class="tool-section">
+        <div class="panel">
+          <h2>Linux 服务器巡检</h2>
+          <p>输入 Linux 服务器的 IP、端口、用户名和密码后，工具会通过 SSH 登录并采集 CPU、内存、磁盘、开放端口与占用程序、JDK、Docker 信息以及 Nginx 关键配置。</p>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="linuxHost">服务器 IP / 域名</label>
+              <input type="text" id="linuxHost" placeholder="例如 192.168.1.20 或 server.example.com" />
+            </div>
+            <div class="field field-third">
+              <label for="linuxPort">SSH 端口</label>
+              <input type="number" id="linuxPort" min="1" max="65535" value="22" />
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="linuxUsername">用户名</label>
+              <input type="text" id="linuxUsername" placeholder="root / ubuntu / deploy" />
+            </div>
+            <div class="field">
+              <label for="linuxPassword">密码</label>
+              <input type="password" id="linuxPassword" placeholder="输入服务器登录密码" />
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button id="linuxInspectBtn">开始巡检</button>
+          </div>
+
+          <div id="linuxStatus" class="status-message"></div>
+        </div>
+
+        <div class="panel">
+          <h3>巡检摘要</h3>
+          <div class="meta-row">
+            <div>最近巡检时间</div>
+            <div id="linuxLastChecked">--</div>
+          </div>
+          <div id="linuxAlerts" class="alerts-grid" style="margin-top: 16px;">
+            <div class="empty-state">巡检完成后，这里会显示自动分析出的告警和提示。</div>
+          </div>
+          <div style="height: 16px;"></div>
+          <div id="linuxSummaryGrid" class="stats-grid">
+            <div class="empty-state">输入服务器信息后点击“开始巡检”，结果会显示在这里。</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>详细输出</h3>
+          <div id="linuxSections"></div>
         </div>
       </section>
 

@@ -137,11 +137,119 @@ type DownloadRuntimeState = {
   partialResults: DownloadItemResult[];
 };
 
+type LinuxServerCredentials = {
+  host: string;
+  port?: number;
+  username: string;
+  password: string;
+};
+
+type LinuxServerSection = {
+  key: 'summary' | 'cpu' | 'memory' | 'disk' | 'ports' | 'jdk' | 'dockerImages' | 'dockerContainers' | 'nginx' | 'nginxCerts';
+  title: string;
+  command: string;
+  output: string;
+};
+
+type LinuxServerAlert = {
+  level: 'info' | 'warning' | 'error';
+  title: string;
+  detail: string;
+};
+
+type LinuxServerInspectResult = {
+  success: boolean;
+  message: string;
+  inspectedAt: string;
+  server: {
+    host: string;
+    port: number;
+    username: string;
+  };
+  summary: {
+    hostname?: string;
+    os?: string;
+    kernel?: string;
+    uptime?: string;
+    primaryIp?: string;
+    memoryUsagePercent?: number;
+    highestDiskUsagePercent?: number;
+    openPortCount?: number;
+    dockerContainerCount?: number;
+    dockerRunningCount?: number;
+    nginxCertificateCount?: number;
+  };
+  alerts: LinuxServerAlert[];
+  sections: LinuxServerSection[];
+};
+
+type LocalSystemSection = {
+  key: string;
+  title: string;
+  command: string;
+  output: string;
+};
+
+type LocalSystemInsight = {
+  level: 'info' | 'warning' | 'error';
+  title: string;
+  detail: string;
+};
+
+type LocalSystemScoreBreakdown = {
+  label: string;
+  score: number;
+  maxScore: number;
+  detail: string;
+};
+
+type LocalSystemInspectResult = {
+  success: boolean;
+  message: string;
+  inspectedAt: string;
+  platform: string;
+  score: {
+    overall: number;
+    label: string;
+    breakdown: LocalSystemScoreBreakdown[];
+  };
+  summary: {
+    hostname: string;
+    os: string;
+    version: string;
+    arch: string;
+    uptime: string;
+    cpuModel: string;
+    cpuCores: number;
+    totalMemory: string;
+    totalMemoryBytes: number;
+    graphicsCount?: number;
+    diskCount?: number;
+    networkCount?: number;
+    displayCount?: number;
+    motherboard?: string;
+    biosVersion?: string;
+    systemDisk?: string;
+    systemDiskFree?: string;
+    systemDiskFreePercent?: number;
+    batteryStatus?: string;
+  };
+  insights: LocalSystemInsight[];
+  sections: LocalSystemSection[];
+};
+
 contextBridge.exposeInMainWorld('electronAPI', {
   openDirectory: () => ipcRenderer.invoke('dialog:openDirectory') as Promise<string | null>,
   openTextFile: () => ipcRenderer.invoke('dialog:openTextFile') as Promise<string | null>,
   openCookieFile: () => ipcRenderer.invoke('dialog:openCookieFile') as Promise<string | null>,
   openPath: (targetPath: string) => ipcRenderer.invoke('system:openPath', targetPath) as Promise<boolean>,
+  inspectLocalSystem: () => ipcRenderer.invoke('system:inspectLocal') as Promise<LocalSystemInspectResult>,
+  copyLocalSystemReport: (result: LocalSystemInspectResult) =>
+    ipcRenderer.invoke('system:copyLocalReport', result) as Promise<SimpleResult>,
+  exportLocalSystemReport: (result: LocalSystemInspectResult, format: 'txt' | 'json') =>
+    ipcRenderer.invoke('system:exportLocalReport', result, format) as Promise<SimpleResult>,
+  inspectLinuxServer: (credentials: LinuxServerCredentials) =>
+    ipcRenderer.invoke('linux:inspectServer', credentials) as Promise<LinuxServerInspectResult>,
   renameFiles: (folderPath: string, searchString: string, replaceString: string) =>
     ipcRenderer.invoke('file:rename', folderPath, searchString, replaceString) as Promise<SimpleResult>,
   generateFileList: (folderPath: string) =>

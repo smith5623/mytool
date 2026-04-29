@@ -1,12 +1,14 @@
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
-import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, shell } from 'electron';
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import { extractFull } from 'node-7z';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { inspectLinuxServer, LinuxServerCredentials, LinuxServerInspectResult } from './linuxInspector';
+import { formatLocalSystemReport, inspectLocalSystem, LocalSystemInspectResult } from './localSystemInspector';
 
 type SimpleResult = {
   success: boolean;
@@ -1102,6 +1104,59 @@ ipcMain.handle('system:openPath', async (_event, targetPath: string) => {
   }
   await shell.openPath(targetPath);
   return true;
+});
+
+ipcMain.handle('linux:inspectServer', async (_event, credentials: LinuxServerCredentials): Promise<LinuxServerInspectResult> => {
+  if (!credentials?.host?.trim()) {
+    throw new Error('Server IP or hostname is required.');
+  }
+
+  if (!credentials.username?.trim()) {
+    throw new Error('Username is required.');
+  }
+
+  if (!credentials.password) {
+    throw new Error('Password is required.');
+  }
+
+  return inspectLinuxServer({
+    host: credentials.host.trim(),
+    port: credentials.port || 22,
+    username: credentials.username.trim(),
+    password: credentials.password,
+  });
+});
+
+ipcMain.handle('system:inspectLocal', async (): Promise<LocalSystemInspectResult> => inspectLocalSystem());
+
+ipcMain.handle('system:copyLocalReport', async (_event, result: LocalSystemInspectResult): Promise<SimpleResult> => {
+  clipboard.writeText(formatLocalSystemReport(result, 'txt'));
+  return {
+    success: true,
+    message: '本机检测报告已复制到剪贴板。',
+  };
+});
+
+ipcMain.handle('system:exportLocalReport', async (_event, result: LocalSystemInspectResult, format: 'txt' | 'json'): Promise<SimpleResult> => {
+  const extension = format === 'json' ? 'json' : 'txt';
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    title: '导出本机检测报告',
+    defaultPath: `local-system-report-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.${extension}`,
+    filters: [{ name: extension.toUpperCase(), extensions: [extension] }],
+  });
+
+  if (canceled || !filePath) {
+    return {
+      success: false,
+      message: '已取消导出。',
+    };
+  }
+
+  await fs.promises.writeFile(filePath, formatLocalSystemReport(result, format), 'utf-8');
+  return {
+    success: true,
+    message: `本机检测报告已导出到: ${filePath}`,
+  };
 });
 
 ipcMain.handle('download:getState', async (): Promise<DownloadToolState> => {

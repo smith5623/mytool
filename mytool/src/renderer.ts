@@ -135,6 +135,107 @@ type DownloadRuntimeState = {
   partialResults: DownloadItemResult[];
 };
 
+type LinuxServerCredentials = {
+  host: string;
+  port?: number;
+  username: string;
+  password: string;
+};
+
+type LinuxServerSection = {
+  key: 'summary' | 'cpu' | 'memory' | 'disk' | 'ports' | 'jdk' | 'dockerImages' | 'dockerContainers' | 'nginx' | 'nginxCerts';
+  title: string;
+  command: string;
+  output: string;
+};
+
+type LinuxServerAlert = {
+  level: 'info' | 'warning' | 'error';
+  title: string;
+  detail: string;
+};
+
+type LinuxServerInspectResult = {
+  success: boolean;
+  message: string;
+  inspectedAt: string;
+  server: {
+    host: string;
+    port: number;
+    username: string;
+  };
+  summary: {
+    hostname?: string;
+    os?: string;
+    kernel?: string;
+    uptime?: string;
+    primaryIp?: string;
+    memoryUsagePercent?: number;
+    highestDiskUsagePercent?: number;
+    openPortCount?: number;
+    dockerContainerCount?: number;
+    dockerRunningCount?: number;
+    nginxCertificateCount?: number;
+  };
+  alerts: LinuxServerAlert[];
+  sections: LinuxServerSection[];
+};
+
+type LocalSystemSection = {
+  key: string;
+  title: string;
+  command: string;
+  output: string;
+};
+
+type LocalSystemInsight = {
+  level: 'info' | 'warning' | 'error';
+  title: string;
+  detail: string;
+};
+
+type LocalSystemScoreBreakdown = {
+  label: string;
+  score: number;
+  maxScore: number;
+  detail: string;
+};
+
+type LocalSystemInspectResult = {
+  success: boolean;
+  message: string;
+  inspectedAt: string;
+  platform: string;
+  score: {
+    overall: number;
+    label: string;
+    breakdown: LocalSystemScoreBreakdown[];
+  };
+  summary: {
+    hostname: string;
+    os: string;
+    version: string;
+    arch: string;
+    uptime: string;
+    cpuModel: string;
+    cpuCores: number;
+    totalMemory: string;
+    totalMemoryBytes: number;
+    graphicsCount?: number;
+    diskCount?: number;
+    networkCount?: number;
+    displayCount?: number;
+    motherboard?: string;
+    biosVersion?: string;
+    systemDisk?: string;
+    systemDiskFree?: string;
+    systemDiskFreePercent?: number;
+    batteryStatus?: string;
+  };
+  insights: LocalSystemInsight[];
+  sections: LocalSystemSection[];
+};
+
 declare global {
   interface Window {
     electronAPI: {
@@ -142,6 +243,10 @@ declare global {
       openTextFile: () => Promise<string | null>;
       openCookieFile: () => Promise<string | null>;
       openPath: (targetPath: string) => Promise<boolean>;
+      inspectLocalSystem: () => Promise<LocalSystemInspectResult>;
+      copyLocalSystemReport: (result: LocalSystemInspectResult) => Promise<SimpleResult>;
+      exportLocalSystemReport: (result: LocalSystemInspectResult, format: 'txt' | 'json') => Promise<SimpleResult>;
+      inspectLinuxServer: (credentials: LinuxServerCredentials) => Promise<LinuxServerInspectResult>;
       renameFiles: (folderPath: string, searchString: string, replaceString: string) => Promise<SimpleResult>;
       generateFileList: (folderPath: string) => Promise<SimpleResult>;
       extractArchives: (folderPath: string) => Promise<BatchExtractResult>;
@@ -188,6 +293,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   const archiveDeletedCount = document.getElementById('archiveDeletedCount') as HTMLSpanElement;
   const archiveFailureCount = document.getElementById('archiveFailureCount') as HTMLSpanElement;
   const archiveExtractedCount = document.getElementById('archiveExtractedCount') as HTMLSpanElement;
+
+  const localInspectBtn = document.getElementById('localInspectBtn') as HTMLButtonElement;
+  const localCopyReportBtn = document.getElementById('localCopyReportBtn') as HTMLButtonElement;
+  const localExportTxtBtn = document.getElementById('localExportTxtBtn') as HTMLButtonElement;
+  const localExportJsonBtn = document.getElementById('localExportJsonBtn') as HTMLButtonElement;
+  const localStatusDiv = document.getElementById('localStatus') as HTMLDivElement;
+  const localScoreValue = document.getElementById('localScoreValue') as HTMLDivElement;
+  const localScoreLabel = document.getElementById('localScoreLabel') as HTMLDivElement;
+  const localScoreBreakdown = document.getElementById('localScoreBreakdown') as HTMLDivElement;
+  const localInsightsContainer = document.getElementById('localInsights') as HTMLDivElement;
+  const localSummaryGrid = document.getElementById('localSummaryGrid') as HTMLDivElement;
+  const localSectionsContainer = document.getElementById('localSections') as HTMLDivElement;
+  const localLastChecked = document.getElementById('localLastChecked') as HTMLDivElement;
+
+  const linuxHostInput = document.getElementById('linuxHost') as HTMLInputElement;
+  const linuxPortInput = document.getElementById('linuxPort') as HTMLInputElement;
+  const linuxUsernameInput = document.getElementById('linuxUsername') as HTMLInputElement;
+  const linuxPasswordInput = document.getElementById('linuxPassword') as HTMLInputElement;
+  const linuxInspectBtn = document.getElementById('linuxInspectBtn') as HTMLButtonElement;
+  const linuxStatusDiv = document.getElementById('linuxStatus') as HTMLDivElement;
+  const linuxAlertsContainer = document.getElementById('linuxAlerts') as HTMLDivElement;
+  const linuxSummaryGrid = document.getElementById('linuxSummaryGrid') as HTMLDivElement;
+  const linuxSectionsContainer = document.getElementById('linuxSections') as HTMLDivElement;
+  const linuxLastChecked = document.getElementById('linuxLastChecked') as HTMLDivElement;
 
   const douyinLinksInput = document.getElementById('douyinLinksInput') as HTMLTextAreaElement;
   const importLinksBtn = document.getElementById('importLinksBtn') as HTMLButtonElement;
@@ -237,6 +366,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let lastDownloadResult: BatchDownloadResult | null = null;
   let lastFailedUrls: string[] = [];
+  let lastLocalInspectResult: LocalSystemInspectResult | null = null;
 
   const showStatus = (element: HTMLDivElement, message: string, kind: 'success' | 'error' | 'info' = 'info'): void => {
     element.textContent = message;
@@ -263,6 +393,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     target.textContent = lines.slice(-maxLines).join('\n');
     target.scrollTop = target.scrollHeight;
   };
+
+  const escapeHtml = (value: string): string =>
+    value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
 
   const resetArchiveProgress = (): void => {
     archiveProgressBar.value = 0;
@@ -412,6 +550,178 @@ document.addEventListener('DOMContentLoaded', async () => {
     await window.electronAPI.saveDownloadPreferences(readDownloadPreferencesFromForm());
   };
 
+  const renderLinuxSummary = (result: LinuxServerInspectResult): void => {
+    const summaryEntries = [
+      { label: 'Host', value: `${result.server.host}:${result.server.port}` },
+      { label: 'User', value: result.server.username },
+      { label: 'Hostname', value: result.summary.hostname || '-' },
+      { label: 'OS', value: result.summary.os || '-' },
+      { label: 'Kernel', value: result.summary.kernel || '-' },
+      { label: 'Uptime', value: result.summary.uptime || '-' },
+      { label: 'Primary IP', value: result.summary.primaryIp || '-' },
+      { label: 'Memory Usage', value: result.summary.memoryUsagePercent !== undefined ? `${result.summary.memoryUsagePercent}%` : '-' },
+      { label: 'Highest Disk Usage', value: result.summary.highestDiskUsagePercent !== undefined ? `${result.summary.highestDiskUsagePercent}%` : '-' },
+      { label: 'Listening Ports', value: result.summary.openPortCount !== undefined ? String(result.summary.openPortCount) : '-' },
+      { label: 'Docker Containers', value: `${result.summary.dockerRunningCount || 0} running / ${result.summary.dockerContainerCount || 0} total` },
+      { label: 'Nginx Certs', value: String(result.summary.nginxCertificateCount || 0) },
+    ];
+
+    linuxSummaryGrid.innerHTML = summaryEntries
+      .map(
+        (item) => `
+          <div class="stats-card">
+            <div class="stats-label">${escapeHtml(item.label)}</div>
+            <div class="stats-value stats-value-small">${escapeHtml(item.value)}</div>
+          </div>
+        `,
+      )
+      .join('');
+  };
+
+  const renderLinuxAlerts = (alerts: LinuxServerAlert[]): void => {
+    if (alerts.length === 0) {
+      linuxAlertsContainer.innerHTML = '<div class="empty-state">本次巡检没有发现需要提示的项目。</div>';
+      return;
+    }
+
+    linuxAlertsContainer.innerHTML = alerts
+      .map(
+        (alert) => `
+          <div class="alert-card ${alert.level}">
+            <div class="alert-title">${escapeHtml(alert.title)}</div>
+            <div class="alert-detail">${escapeHtml(alert.detail)}</div>
+          </div>
+        `,
+      )
+      .join('');
+  };
+
+  const renderLinuxSections = (sections: LinuxServerSection[]): void => {
+    linuxSectionsContainer.innerHTML = sections
+      .filter((section) => section.key !== 'summary')
+      .map(
+        (section) => `
+          <div class="result-block">
+            <div class="result-title-row">
+              <h4>${escapeHtml(section.title)}</h4>
+              <code>${escapeHtml(section.command)}</code>
+            </div>
+            <pre class="result-pre">${escapeHtml(section.output)}</pre>
+          </div>
+        `,
+      )
+      .join('');
+  };
+
+  const renderLocalSummary = (result: LocalSystemInspectResult): void => {
+    const summaryEntries = [
+      { label: '评分', value: `${result.score.overall}/100` },
+      { label: '平台', value: result.platform },
+      { label: '主机名', value: result.summary.hostname || '-' },
+      { label: '系统', value: result.summary.os || '-' },
+      { label: '版本', value: result.summary.version || '-' },
+      { label: '处理器', value: result.summary.cpuModel || '-' },
+      { label: '线程数', value: String(result.summary.cpuCores || '-') },
+      { label: '内存', value: result.summary.totalMemory || '-' },
+      { label: '架构', value: result.summary.arch || '-' },
+      { label: '运行时长', value: result.summary.uptime || '-' },
+      { label: '显卡数量', value: String(result.summary.graphicsCount ?? '-') },
+      { label: '磁盘数量', value: String(result.summary.diskCount ?? '-') },
+      { label: '网卡数量', value: String(result.summary.networkCount ?? '-') },
+      { label: '显示器数量', value: String(result.summary.displayCount ?? '-') },
+      { label: '主板', value: result.summary.motherboard || '-' },
+      { label: 'BIOS/固件', value: result.summary.biosVersion || '-' },
+      { label: 'System Disk', value: result.summary.systemDisk || '-' },
+      {
+        label: '系统盘剩余',
+        value: result.summary.systemDiskFree
+          ? `${result.summary.systemDiskFree}${result.summary.systemDiskFreePercent !== undefined ? ` (${result.summary.systemDiskFreePercent.toFixed(0)}%)` : ''}`
+          : '-',
+      },
+      { label: '电池', value: result.summary.batteryStatus || '-' },
+    ];
+
+    localSummaryGrid.innerHTML = summaryEntries
+      .map(
+        (item) => `
+          <div class="stats-card">
+            <div class="stats-label">${escapeHtml(item.label)}</div>
+            <div class="stats-value stats-value-small">${escapeHtml(item.value)}</div>
+          </div>
+        `,
+      )
+      .join('');
+  };
+
+  const renderLocalScore = (result: LocalSystemInspectResult): void => {
+    localScoreValue.textContent = `${result.score.overall}`;
+    localScoreLabel.textContent = result.score.label;
+    localScoreBreakdown.innerHTML = result.score.breakdown
+      .map(
+        (item) => `
+          <div class="history-item">
+            <div class="history-title">${escapeHtml(item.label)}: ${item.score}/${item.maxScore}</div>
+            <div class="history-meta">${escapeHtml(item.detail)}</div>
+          </div>
+        `,
+      )
+      .join('');
+  };
+
+  const renderLocalInsights = (insights: LocalSystemInsight[]): void => {
+    localInsightsContainer.innerHTML = insights
+      .map(
+        (item) => `
+          <div class="alert-card ${item.level === 'error' ? 'error' : item.level === 'warning' ? 'warning' : 'info'}">
+            <div class="alert-title">${escapeHtml(item.title)}</div>
+            <div class="alert-detail">${escapeHtml(item.detail)}</div>
+          </div>
+        `,
+      )
+      .join('');
+  };
+
+  const renderLocalSections = (sections: LocalSystemSection[]): void => {
+    localSectionsContainer.innerHTML = sections
+      .filter((section) => section.key !== 'summary' && section.key !== 'system')
+      .map(
+        (section) => `
+          <div class="result-block">
+            <div class="result-title-row">
+              <h4>${escapeHtml(section.title)}</h4>
+              <code>${escapeHtml(section.command)}</code>
+            </div>
+            <pre class="result-pre">${escapeHtml(section.output)}</pre>
+          </div>
+        `,
+      )
+      .join('');
+  };
+
+  const clearLocalResult = (): void => {
+    localScoreValue.textContent = '--';
+    localScoreLabel.textContent = '等待检测';
+    localScoreBreakdown.innerHTML = '<div class="empty-state">完成检测后，这里会拆分显示评分依据。</div>';
+    localInsightsContainer.innerHTML = '<div class="empty-state">完成检测后，这里会显示异常提示和建议项。</div>';
+    localSummaryGrid.innerHTML = '<div class="empty-state">点击“开始检测”后，这里会显示本机的 CPU、内存、硬盘、显卡和系统信息。</div>';
+    localScoreLabel.textContent = '等待检测';
+    localScoreBreakdown.innerHTML = '<div class="empty-state">完成检测后，这里会拆分显示评分依据。</div>';
+    localInsightsContainer.innerHTML = '<div class="empty-state">完成检测后，这里会显示异常提示和建议项。</div>';
+    localSummaryGrid.innerHTML = '<div class="empty-state">点击“开始检测”后，这里会显示本机的 CPU、内存、硬盘、显卡和系统信息。</div>';
+    localSectionsContainer.innerHTML = '';
+    localLastChecked.textContent = '--';
+    localCopyReportBtn.disabled = true;
+    localExportTxtBtn.disabled = true;
+    localExportJsonBtn.disabled = true;
+  };
+
+  const clearLinuxResult = (): void => {
+    linuxAlertsContainer.innerHTML = '<div class="empty-state">巡检完成后，这里会显示自动分析出的告警和提示。</div>';
+    linuxSummaryGrid.innerHTML = '<div class="empty-state">输入服务器信息后点击“开始巡检”，结果会显示在这里。</div>';
+    linuxSectionsContainer.innerHTML = '';
+    linuxLastChecked.textContent = '--';
+  };
+
   const applyArchiveRuntimeState = async (): Promise<void> => {
     const state = await window.electronAPI.getArchiveRuntimeState();
     if (state.selectedFolderPath) {
@@ -486,6 +796,115 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (navItems.length > 0) {
     showToolSection(`${navItems[0].id.replace('nav-', '')}-tool`);
   }
+
+  localInspectBtn.addEventListener('click', async () => {
+    clearLocalResult();
+    localInspectBtn.disabled = true;
+    localCopyReportBtn.disabled = true;
+    localExportTxtBtn.disabled = true;
+    localExportJsonBtn.disabled = true;
+    lastLocalInspectResult = null;
+    showStatus(localStatusDiv, '正在检测本机 CPU、内存、硬盘、显卡和系统信息...');
+    showStatus(localStatusDiv, '正在检测本机 CPU、内存、硬盘、显卡和系统信息...');
+
+    try {
+      const result = await window.electronAPI.inspectLocalSystem();
+      lastLocalInspectResult = result;
+      renderLocalScore(result);
+      renderLocalInsights(result.insights);
+      renderLocalSummary(result);
+      renderLocalSections(result.sections);
+      localLastChecked.textContent = new Date(result.inspectedAt).toLocaleString();
+      localCopyReportBtn.disabled = false;
+      localExportTxtBtn.disabled = false;
+      localExportJsonBtn.disabled = false;
+      showStatus(localStatusDiv, result.message, result.success ? 'success' : 'error');
+    } catch (error) {
+      clearLocalResult();
+      showStatus(localStatusDiv, `检测失败：${(error as Error).message}`, 'error');
+      showStatus(localStatusDiv, `检测失败: ${(error as Error).message}`, 'error');
+    } finally {
+      localInspectBtn.disabled = false;
+    }
+  });
+
+  localCopyReportBtn.addEventListener('click', async () => {
+    if (!lastLocalInspectResult) {
+      showStatus(localStatusDiv, '请先完成一次检测。', 'error');
+      showStatus(localStatusDiv, '请先完成一次检测。', 'error');
+      return;
+    }
+
+    const result = await window.electronAPI.copyLocalSystemReport(lastLocalInspectResult);
+    showStatus(localStatusDiv, result.message, result.success ? 'success' : 'error');
+  });
+
+  localExportTxtBtn.addEventListener('click', async () => {
+    if (!lastLocalInspectResult) {
+      showStatus(localStatusDiv, '请先完成一次检测。', 'error');
+      showStatus(localStatusDiv, '请先完成一次检测。', 'error');
+      return;
+    }
+
+    const result = await window.electronAPI.exportLocalSystemReport(lastLocalInspectResult, 'txt');
+    showStatus(localStatusDiv, result.message, result.success ? 'success' : 'error');
+  });
+
+  localExportJsonBtn.addEventListener('click', async () => {
+    if (!lastLocalInspectResult) {
+      showStatus(localStatusDiv, '请先完成一次检测。', 'error');
+      showStatus(localStatusDiv, '请先完成一次检测。', 'error');
+      return;
+    }
+
+    const result = await window.electronAPI.exportLocalSystemReport(lastLocalInspectResult, 'json');
+    showStatus(localStatusDiv, result.message, result.success ? 'success' : 'error');
+  });
+
+  linuxInspectBtn.addEventListener('click', async () => {
+    const credentials: LinuxServerCredentials = {
+      host: linuxHostInput.value.trim(),
+      port: Number(linuxPortInput.value) || 22,
+      username: linuxUsernameInput.value.trim(),
+      password: linuxPasswordInput.value,
+    };
+
+    if (!credentials.host) {
+      showStatus(linuxStatusDiv, '请输入 Linux 服务器 IP 或域名。', 'error');
+      return;
+    }
+
+    if (!credentials.username) {
+      showStatus(linuxStatusDiv, '请输入登录用户名。', 'error');
+      return;
+    }
+
+    if (!credentials.password) {
+      showStatus(linuxStatusDiv, '请输入登录密码。', 'error');
+      return;
+    }
+
+    linuxInspectBtn.disabled = true;
+    linuxSummaryGrid.innerHTML = '';
+    linuxSectionsContainer.innerHTML = '';
+    linuxLastChecked.textContent = '--';
+    showStatus(linuxStatusDiv, '正在连接服务器并采集 CPU、内存、磁盘、端口占用、JDK、Docker、Nginx 和证书信息...');
+
+    try {
+      const result = await window.electronAPI.inspectLinuxServer(credentials);
+      renderLinuxSummary(result);
+      renderLinuxAlerts(result.alerts);
+      renderLinuxSections(result.sections);
+      linuxLastChecked.textContent = new Date(result.inspectedAt).toLocaleString();
+      showStatus(linuxStatusDiv, result.message, result.success ? 'success' : 'error');
+    } catch (error) {
+      clearLinuxResult();
+      showStatus(linuxStatusDiv, `巡检失败: ${(error as Error).message}`, 'error');
+    } finally {
+      linuxInspectBtn.disabled = false;
+      linuxPasswordInput.value = '';
+    }
+  });
 
   selectFolderBtn.addEventListener('click', async () => {
     await chooseDirectory(folderPathInput, stringReplacerStatusDiv, '已选择文件夹');
@@ -818,6 +1237,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   resetArchiveProgress();
   resetDownloadProgress();
+  clearLocalResult();
+  clearLinuxResult();
   await applyArchiveRuntimeState();
   await applyDownloadRuntimeState();
 
