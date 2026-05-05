@@ -143,7 +143,22 @@ type LinuxServerCredentials = {
 };
 
 type LinuxServerSection = {
-  key: 'summary' | 'cpu' | 'memory' | 'disk' | 'ports' | 'jdk' | 'dockerImages' | 'dockerContainers' | 'nginx' | 'nginxCerts';
+  key:
+    | 'summary'
+    | 'cpu'
+    | 'memory'
+    | 'disk'
+    | 'diskTop'
+    | 'ports'
+    | 'processes'
+    | 'journal'
+    | 'jdk'
+    | 'dockerImages'
+    | 'dockerContainers'
+    | 'nginx'
+    | 'nginxCerts'
+    | 'systemd'
+    | 'security';
   title: string;
   command: string;
   output: string;
@@ -152,6 +167,31 @@ type LinuxServerSection = {
 type LinuxServerAlert = {
   level: 'info' | 'warning' | 'error';
   title: string;
+  detail: string;
+};
+
+type LinuxServerScoreBreakdown = {
+  label: string;
+  score: number;
+  maxScore: number;
+  detail: string;
+};
+
+type LinuxServerCertificate = {
+  path: string;
+  subject?: string;
+  issuer?: string;
+  notBefore?: string;
+  notAfter?: string;
+  daysRemaining?: number;
+  status: 'valid' | 'expiring' | 'expired' | 'unknown';
+};
+
+type LinuxServiceHealth = {
+  key: 'docker' | 'nginx' | 'jdk';
+  title: string;
+  status: 'healthy' | 'warning' | 'error' | 'missing';
+  summary: string;
   detail: string;
 };
 
@@ -176,8 +216,35 @@ type LinuxServerInspectResult = {
     dockerContainerCount?: number;
     dockerRunningCount?: number;
     nginxCertificateCount?: number;
+    failedServiceCount?: number;
+    rootLogin?: string;
+    passwordAuthentication?: string;
+    firewallStatus?: string;
+    selinuxStatus?: string;
+    failedLoginCount?: number;
+    expiringCertificateCount?: number;
+    expiredCertificateCount?: number;
+    earliestCertificateExpiryDays?: number;
+    topCpuProcess?: string;
+    topMemoryProcess?: string;
+    largestDirectory?: string;
+    riskyPortCount?: number;
+    riskyPorts?: string[];
+    recentErrorCount?: number;
+    recentErrorPreview?: string;
+    failedLoginIpCount?: number;
+    topFailedLoginIp?: string;
+    failedLoginSources?: string[];
   };
+  score: {
+    overall: number;
+    label: string;
+    breakdown: LinuxServerScoreBreakdown[];
+  };
+  highlights: string[];
   alerts: LinuxServerAlert[];
+  certificates: LinuxServerCertificate[];
+  serviceHealth: LinuxServiceHealth[];
   sections: LinuxServerSection[];
 };
 
@@ -313,6 +380,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const linuxPasswordInput = document.getElementById('linuxPassword') as HTMLInputElement;
   const linuxInspectBtn = document.getElementById('linuxInspectBtn') as HTMLButtonElement;
   const linuxStatusDiv = document.getElementById('linuxStatus') as HTMLDivElement;
+  const linuxHighlightsContainer = document.getElementById('linuxHighlights') as HTMLDivElement;
+  const linuxScoreBreakdownContainer = document.getElementById('linuxScoreBreakdown') as HTMLDivElement;
+  const linuxServiceHealthContainer = document.getElementById('linuxServiceHealth') as HTMLDivElement;
   const linuxAlertsContainer = document.getElementById('linuxAlerts') as HTMLDivElement;
   const linuxSummaryGrid = document.getElementById('linuxSummaryGrid') as HTMLDivElement;
   const linuxSectionsContainer = document.getElementById('linuxSections') as HTMLDivElement;
@@ -551,19 +621,40 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const renderLinuxSummary = (result: LinuxServerInspectResult): void => {
+    const certificateHealth =
+      result.summary.expiredCertificateCount && result.summary.expiredCertificateCount > 0
+        ? `${result.summary.expiredCertificateCount} expired`
+        : result.summary.expiringCertificateCount && result.summary.expiringCertificateCount > 0
+          ? `${result.summary.expiringCertificateCount} expiring`
+          : `${result.summary.nginxCertificateCount || 0} healthy`;
+
     const summaryEntries = [
+      { label: 'Score', value: `${result.score.overall}/100` },
+      { label: 'Risk', value: result.score.label },
       { label: 'Host', value: `${result.server.host}:${result.server.port}` },
       { label: 'User', value: result.server.username },
       { label: 'Hostname', value: result.summary.hostname || '-' },
       { label: 'OS', value: result.summary.os || '-' },
-      { label: 'Kernel', value: result.summary.kernel || '-' },
       { label: 'Uptime', value: result.summary.uptime || '-' },
       { label: 'Primary IP', value: result.summary.primaryIp || '-' },
       { label: 'Memory Usage', value: result.summary.memoryUsagePercent !== undefined ? `${result.summary.memoryUsagePercent}%` : '-' },
       { label: 'Highest Disk Usage', value: result.summary.highestDiskUsagePercent !== undefined ? `${result.summary.highestDiskUsagePercent}%` : '-' },
       { label: 'Listening Ports', value: result.summary.openPortCount !== undefined ? String(result.summary.openPortCount) : '-' },
+      { label: 'Failed Services', value: result.summary.failedServiceCount !== undefined ? String(result.summary.failedServiceCount) : '-' },
       { label: 'Docker Containers', value: `${result.summary.dockerRunningCount || 0} running / ${result.summary.dockerContainerCount || 0} total` },
-      { label: 'Nginx Certs', value: String(result.summary.nginxCertificateCount || 0) },
+      { label: 'Certificates', value: certificateHealth },
+      { label: 'Earliest Cert Expiry', value: result.summary.earliestCertificateExpiryDays !== undefined ? `${result.summary.earliestCertificateExpiryDays} day(s)` : '-' },
+      { label: 'Root Login', value: result.summary.rootLogin || '-' },
+      { label: 'Password Auth', value: result.summary.passwordAuthentication || '-' },
+      { label: 'Firewall', value: result.summary.firewallStatus || '-' },
+      { label: 'Failed Logins', value: result.summary.failedLoginCount !== undefined ? String(result.summary.failedLoginCount) : '-' },
+      { label: 'Top Failed Login Source', value: result.summary.topFailedLoginIp || '-' },
+      { label: 'Failed Login Source Count', value: result.summary.failedLoginIpCount !== undefined ? String(result.summary.failedLoginIpCount) : '-' },
+      { label: 'Top CPU Process', value: result.summary.topCpuProcess || '-' },
+      { label: 'Top Memory Process', value: result.summary.topMemoryProcess || '-' },
+      { label: 'Largest Directory', value: result.summary.largestDirectory || '-' },
+      { label: 'Risky Public Ports', value: result.summary.riskyPortCount ? (result.summary.riskyPorts || []).join(', ') : '-' },
+      { label: 'Recent Error Logs', value: result.summary.recentErrorCount !== undefined ? String(result.summary.recentErrorCount) : '-' },
     ];
 
     linuxSummaryGrid.innerHTML = summaryEntries
@@ -578,9 +669,57 @@ document.addEventListener('DOMContentLoaded', async () => {
       .join('');
   };
 
+  const renderLinuxHighlights = (highlights: string[]): void => {
+    if (highlights.length === 0) {
+      linuxHighlightsContainer.innerHTML = '<div class="empty-state">Key findings will appear here after inspection.</div>';
+      return;
+    }
+
+    linuxHighlightsContainer.innerHTML = highlights
+      .map(
+        (item) => `
+          <div class="history-item">
+            <div class="history-meta">${escapeHtml(item)}</div>
+          </div>
+        `,
+      )
+      .join('');
+  };
+
+  const renderLinuxScoreBreakdown = (breakdown: LinuxServerScoreBreakdown[]): void => {
+    linuxScoreBreakdownContainer.innerHTML = breakdown
+      .map(
+        (item) => `
+          <div class="history-item">
+            <div class="history-title">${escapeHtml(item.label)}: ${item.score}/${item.maxScore}</div>
+            <div class="history-meta">${escapeHtml(item.detail)}</div>
+          </div>
+        `,
+      )
+      .join('');
+  };
+
+  const renderLinuxServiceHealth = (serviceHealth: LinuxServiceHealth[]): void => {
+    if (serviceHealth.length === 0) {
+      linuxServiceHealthContainer.innerHTML = '<div class="empty-state">Service health cards will appear here after inspection.</div>';
+      return;
+    }
+
+    linuxServiceHealthContainer.innerHTML = serviceHealth
+      .map(
+        (item) => `
+          <div class="alert-card ${item.status === 'healthy' ? 'info' : item.status === 'warning' ? 'warning' : 'error'}">
+            <div class="alert-title">${escapeHtml(item.title)}: ${escapeHtml(item.summary)}</div>
+            <div class="alert-detail">${escapeHtml(item.detail)}</div>
+          </div>
+        `,
+      )
+      .join('');
+  };
+
   const renderLinuxAlerts = (alerts: LinuxServerAlert[]): void => {
     if (alerts.length === 0) {
-      linuxAlertsContainer.innerHTML = '<div class="empty-state">本次巡检没有发现需要提示的项目。</div>';
+      linuxAlertsContainer.innerHTML = '<div class="empty-state">No warnings or critical issues were detected.</div>';
       return;
     }
 
@@ -716,8 +855,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const clearLinuxResult = (): void => {
-    linuxAlertsContainer.innerHTML = '<div class="empty-state">巡检完成后，这里会显示自动分析出的告警和提示。</div>';
-    linuxSummaryGrid.innerHTML = '<div class="empty-state">输入服务器信息后点击“开始巡检”，结果会显示在这里。</div>';
+    linuxHighlightsContainer.innerHTML = '<div class="empty-state">Key findings will appear here after inspection.</div>';
+    linuxScoreBreakdownContainer.innerHTML = '<div class="empty-state">Score breakdown will appear here after inspection.</div>';
+    linuxServiceHealthContainer.innerHTML = '<div class="empty-state">Service health cards will appear here after inspection.</div>';
+    linuxAlertsContainer.innerHTML = '<div class="empty-state">Warnings and recommendations will appear here after inspection.</div>';
+    linuxSummaryGrid.innerHTML = '<div class="empty-state">Run an inspection to view server summary, security baseline, and certificate status.</div>';
     linuxSectionsContainer.innerHTML = '';
     linuxLastChecked.textContent = '--';
   };
@@ -885,14 +1027,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     linuxInspectBtn.disabled = true;
-    linuxSummaryGrid.innerHTML = '';
-    linuxSectionsContainer.innerHTML = '';
-    linuxLastChecked.textContent = '--';
+    clearLinuxResult();
     showStatus(linuxStatusDiv, '正在连接服务器并采集 CPU、内存、磁盘、端口占用、JDK、Docker、Nginx 和证书信息...');
 
     try {
       const result = await window.electronAPI.inspectLinuxServer(credentials);
       renderLinuxSummary(result);
+      renderLinuxHighlights(result.highlights);
+      renderLinuxScoreBreakdown(result.score.breakdown);
+      renderLinuxServiceHealth(result.serviceHealth);
       renderLinuxAlerts(result.alerts);
       renderLinuxSections(result.sections);
       linuxLastChecked.textContent = new Date(result.inspectedAt).toLocaleString();

@@ -145,7 +145,22 @@ type LinuxServerCredentials = {
 };
 
 type LinuxServerSection = {
-  key: 'summary' | 'cpu' | 'memory' | 'disk' | 'ports' | 'jdk' | 'dockerImages' | 'dockerContainers' | 'nginx' | 'nginxCerts';
+  key:
+    | 'summary'
+    | 'cpu'
+    | 'memory'
+    | 'disk'
+    | 'diskTop'
+    | 'ports'
+    | 'processes'
+    | 'journal'
+    | 'jdk'
+    | 'dockerImages'
+    | 'dockerContainers'
+    | 'nginx'
+    | 'nginxCerts'
+    | 'systemd'
+    | 'security';
   title: string;
   command: string;
   output: string;
@@ -154,6 +169,31 @@ type LinuxServerSection = {
 type LinuxServerAlert = {
   level: 'info' | 'warning' | 'error';
   title: string;
+  detail: string;
+};
+
+type LinuxServerScoreBreakdown = {
+  label: string;
+  score: number;
+  maxScore: number;
+  detail: string;
+};
+
+type LinuxServerCertificate = {
+  path: string;
+  subject?: string;
+  issuer?: string;
+  notBefore?: string;
+  notAfter?: string;
+  daysRemaining?: number;
+  status: 'valid' | 'expiring' | 'expired' | 'unknown';
+};
+
+type LinuxServiceHealth = {
+  key: 'docker' | 'nginx' | 'jdk';
+  title: string;
+  status: 'healthy' | 'warning' | 'error' | 'missing';
+  summary: string;
   detail: string;
 };
 
@@ -178,8 +218,35 @@ type LinuxServerInspectResult = {
     dockerContainerCount?: number;
     dockerRunningCount?: number;
     nginxCertificateCount?: number;
+    failedServiceCount?: number;
+    rootLogin?: string;
+    passwordAuthentication?: string;
+    firewallStatus?: string;
+    selinuxStatus?: string;
+    failedLoginCount?: number;
+    expiringCertificateCount?: number;
+    expiredCertificateCount?: number;
+    earliestCertificateExpiryDays?: number;
+    topCpuProcess?: string;
+    topMemoryProcess?: string;
+    largestDirectory?: string;
+    riskyPortCount?: number;
+    riskyPorts?: string[];
+    recentErrorCount?: number;
+    recentErrorPreview?: string;
+    failedLoginIpCount?: number;
+    topFailedLoginIp?: string;
+    failedLoginSources?: string[];
   };
+  score: {
+    overall: number;
+    label: string;
+    breakdown: LinuxServerScoreBreakdown[];
+  };
+  highlights: string[];
   alerts: LinuxServerAlert[];
+  certificates: LinuxServerCertificate[];
+  serviceHealth: LinuxServiceHealth[];
   sections: LinuxServerSection[];
 };
 
