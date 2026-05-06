@@ -7,7 +7,15 @@ import { extractFull } from 'node-7z';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { inspectLinuxServer, LinuxServerCredentials, LinuxServerInspectResult } from './linuxInspector';
+import {
+  inspectLinuxServer,
+  LinuxInspectScope,
+  LinuxQuickAction,
+  LinuxQuickActionResult,
+  LinuxServerCredentials,
+  LinuxServerInspectResult,
+  runLinuxQuickAction,
+} from './linuxInspector';
 import { formatLocalSystemReport, inspectLocalSystem, LocalSystemInspectResult } from './localSystemInspector';
 
 type SimpleResult = {
@@ -1106,26 +1114,59 @@ ipcMain.handle('system:openPath', async (_event, targetPath: string) => {
   return true;
 });
 
-ipcMain.handle('linux:inspectServer', async (_event, credentials: LinuxServerCredentials): Promise<LinuxServerInspectResult> => {
+ipcMain.handle(
+  'linux:inspectServer',
+  async (_event, credentials: LinuxServerCredentials, scope: LinuxInspectScope = 'full'): Promise<LinuxServerInspectResult> => {
   if (!credentials?.host?.trim()) {
-    throw new Error('Server IP or hostname is required.');
+    throw new Error('请输入服务器 IP 或主机名。');
   }
 
   if (!credentials.username?.trim()) {
-    throw new Error('Username is required.');
+    throw new Error('请输入登录用户名。');
   }
 
   if (!credentials.password) {
-    throw new Error('Password is required.');
+    throw new Error('请输入登录密码。');
   }
 
-  return inspectLinuxServer({
-    host: credentials.host.trim(),
-    port: credentials.port || 22,
-    username: credentials.username.trim(),
-    password: credentials.password,
-  });
-});
+    return inspectLinuxServer(
+      {
+        host: credentials.host.trim(),
+        port: credentials.port || 22,
+        username: credentials.username.trim(),
+        password: credentials.password,
+      },
+      scope,
+    );
+  },
+);
+
+ipcMain.handle(
+  'linux:quickAction',
+  async (_event, credentials: LinuxServerCredentials, action: LinuxQuickAction): Promise<LinuxQuickActionResult> => {
+    if (!credentials?.host?.trim()) {
+      throw new Error('请输入服务器 IP 或主机名。');
+    }
+
+    if (!credentials.username?.trim()) {
+      throw new Error('请输入登录用户名。');
+    }
+
+    if (!credentials.password) {
+      throw new Error('请输入登录密码。');
+    }
+
+    return runLinuxQuickAction(
+      {
+        host: credentials.host.trim(),
+        port: credentials.port || 22,
+        username: credentials.username.trim(),
+        password: credentials.password,
+      },
+      action,
+    );
+  },
+);
 
 ipcMain.handle('system:inspectLocal', async (): Promise<LocalSystemInspectResult> => inspectLocalSystem());
 

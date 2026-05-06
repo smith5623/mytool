@@ -142,6 +142,9 @@ type LinuxServerCredentials = {
   password: string;
 };
 
+type LinuxInspectScope = 'full' | 'basic' | 'resource' | 'network' | 'runtime' | 'security';
+type LinuxQuickAction = 'nginxConfig' | 'restartNginx';
+
 type LinuxServerSection = {
   key:
     | 'summary'
@@ -248,6 +251,16 @@ type LinuxServerInspectResult = {
   sections: LinuxServerSection[];
 };
 
+type LinuxQuickActionResult = {
+  success: boolean;
+  message: string;
+  inspectedAt: string;
+  action: LinuxQuickAction;
+  title: string;
+  command: string;
+  output: string;
+};
+
 type LocalSystemSection = {
   key: string;
   title: string;
@@ -313,7 +326,8 @@ declare global {
       inspectLocalSystem: () => Promise<LocalSystemInspectResult>;
       copyLocalSystemReport: (result: LocalSystemInspectResult) => Promise<SimpleResult>;
       exportLocalSystemReport: (result: LocalSystemInspectResult, format: 'txt' | 'json') => Promise<SimpleResult>;
-      inspectLinuxServer: (credentials: LinuxServerCredentials) => Promise<LinuxServerInspectResult>;
+  inspectLinuxServer: (credentials: LinuxServerCredentials, scope?: LinuxInspectScope) => Promise<LinuxServerInspectResult>;
+  runLinuxQuickAction: (credentials: LinuxServerCredentials, action: LinuxQuickAction) => Promise<LinuxQuickActionResult>;
       renameFiles: (folderPath: string, searchString: string, replaceString: string) => Promise<SimpleResult>;
       generateFileList: (folderPath: string) => Promise<SimpleResult>;
       extractArchives: (folderPath: string) => Promise<BatchExtractResult>;
@@ -379,7 +393,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const linuxUsernameInput = document.getElementById('linuxUsername') as HTMLInputElement;
   const linuxPasswordInput = document.getElementById('linuxPassword') as HTMLInputElement;
   const linuxInspectBtn = document.getElementById('linuxInspectBtn') as HTMLButtonElement;
+  const linuxScopeButtons = document.querySelectorAll<HTMLButtonElement>('[data-linux-scope]');
+  const linuxViewNginxConfigBtn = document.getElementById('linuxViewNginxConfigBtn') as HTMLButtonElement;
+  const linuxRestartNginxBtn = document.getElementById('linuxRestartNginxBtn') as HTMLButtonElement;
   const linuxStatusDiv = document.getElementById('linuxStatus') as HTMLDivElement;
+  const linuxQuickActionStatusDiv = document.getElementById('linuxQuickActionStatus') as HTMLDivElement;
+  const linuxQuickActionOutput = document.getElementById('linuxQuickActionOutput') as HTMLDivElement;
   const linuxHighlightsContainer = document.getElementById('linuxHighlights') as HTMLDivElement;
   const linuxScoreBreakdownContainer = document.getElementById('linuxScoreBreakdown') as HTMLDivElement;
   const linuxServiceHealthContainer = document.getElementById('linuxServiceHealth') as HTMLDivElement;
@@ -623,38 +642,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   const renderLinuxSummary = (result: LinuxServerInspectResult): void => {
     const certificateHealth =
       result.summary.expiredCertificateCount && result.summary.expiredCertificateCount > 0
-        ? `${result.summary.expiredCertificateCount} expired`
+        ? `${result.summary.expiredCertificateCount} 个已过期`
         : result.summary.expiringCertificateCount && result.summary.expiringCertificateCount > 0
-          ? `${result.summary.expiringCertificateCount} expiring`
-          : `${result.summary.nginxCertificateCount || 0} healthy`;
+          ? `${result.summary.expiringCertificateCount} 个即将过期`
+          : `${result.summary.nginxCertificateCount || 0} 个正常`;
 
     const summaryEntries = [
-      { label: 'Score', value: `${result.score.overall}/100` },
-      { label: 'Risk', value: result.score.label },
-      { label: 'Host', value: `${result.server.host}:${result.server.port}` },
-      { label: 'User', value: result.server.username },
-      { label: 'Hostname', value: result.summary.hostname || '-' },
+      { label: '评分', value: `${result.score.overall}/100` },
+      { label: '风险等级', value: result.score.label },
+      { label: '主机', value: `${result.server.host}:${result.server.port}` },
+      { label: '用户', value: result.server.username },
+      { label: '主机名', value: result.summary.hostname || '-' },
       { label: 'OS', value: result.summary.os || '-' },
-      { label: 'Uptime', value: result.summary.uptime || '-' },
-      { label: 'Primary IP', value: result.summary.primaryIp || '-' },
-      { label: 'Memory Usage', value: result.summary.memoryUsagePercent !== undefined ? `${result.summary.memoryUsagePercent}%` : '-' },
-      { label: 'Highest Disk Usage', value: result.summary.highestDiskUsagePercent !== undefined ? `${result.summary.highestDiskUsagePercent}%` : '-' },
-      { label: 'Listening Ports', value: result.summary.openPortCount !== undefined ? String(result.summary.openPortCount) : '-' },
-      { label: 'Failed Services', value: result.summary.failedServiceCount !== undefined ? String(result.summary.failedServiceCount) : '-' },
-      { label: 'Docker Containers', value: `${result.summary.dockerRunningCount || 0} running / ${result.summary.dockerContainerCount || 0} total` },
-      { label: 'Certificates', value: certificateHealth },
-      { label: 'Earliest Cert Expiry', value: result.summary.earliestCertificateExpiryDays !== undefined ? `${result.summary.earliestCertificateExpiryDays} day(s)` : '-' },
-      { label: 'Root Login', value: result.summary.rootLogin || '-' },
-      { label: 'Password Auth', value: result.summary.passwordAuthentication || '-' },
-      { label: 'Firewall', value: result.summary.firewallStatus || '-' },
-      { label: 'Failed Logins', value: result.summary.failedLoginCount !== undefined ? String(result.summary.failedLoginCount) : '-' },
-      { label: 'Top Failed Login Source', value: result.summary.topFailedLoginIp || '-' },
-      { label: 'Failed Login Source Count', value: result.summary.failedLoginIpCount !== undefined ? String(result.summary.failedLoginIpCount) : '-' },
-      { label: 'Top CPU Process', value: result.summary.topCpuProcess || '-' },
-      { label: 'Top Memory Process', value: result.summary.topMemoryProcess || '-' },
-      { label: 'Largest Directory', value: result.summary.largestDirectory || '-' },
-      { label: 'Risky Public Ports', value: result.summary.riskyPortCount ? (result.summary.riskyPorts || []).join(', ') : '-' },
-      { label: 'Recent Error Logs', value: result.summary.recentErrorCount !== undefined ? String(result.summary.recentErrorCount) : '-' },
+      { label: '运行时长', value: result.summary.uptime || '-' },
+      { label: '主 IP', value: result.summary.primaryIp || '-' },
+      { label: '内存使用率', value: result.summary.memoryUsagePercent !== undefined ? `${result.summary.memoryUsagePercent}%` : '-' },
+      { label: '最高磁盘使用率', value: result.summary.highestDiskUsagePercent !== undefined ? `${result.summary.highestDiskUsagePercent}%` : '-' },
+      { label: '监听端口数', value: result.summary.openPortCount !== undefined ? String(result.summary.openPortCount) : '-' },
+      { label: '失败服务数', value: result.summary.failedServiceCount !== undefined ? String(result.summary.failedServiceCount) : '-' },
+      { label: 'Docker 容器', value: `${result.summary.dockerRunningCount || 0} 运行中 / ${result.summary.dockerContainerCount || 0} 总数` },
+      { label: '证书状态', value: certificateHealth },
+      { label: '最早证书到期', value: result.summary.earliestCertificateExpiryDays !== undefined ? `${result.summary.earliestCertificateExpiryDays} 天` : '-' },
+      { label: 'Root 登录', value: result.summary.rootLogin || '-' },
+      { label: '密码认证', value: result.summary.passwordAuthentication || '-' },
+      { label: '防火墙', value: result.summary.firewallStatus || '-' },
+      { label: '失败登录次数', value: result.summary.failedLoginCount !== undefined ? String(result.summary.failedLoginCount) : '-' },
+      { label: '主要失败登录来源', value: result.summary.topFailedLoginIp || '-' },
+      { label: '失败来源 IP 数', value: result.summary.failedLoginIpCount !== undefined ? String(result.summary.failedLoginIpCount) : '-' },
+      { label: '最高 CPU 占用进程', value: result.summary.topCpuProcess || '-' },
+      { label: '最高内存占用进程', value: result.summary.topMemoryProcess || '-' },
+      { label: '最大目录', value: result.summary.largestDirectory || '-' },
+      { label: '高风险公网端口', value: result.summary.riskyPortCount ? (result.summary.riskyPorts || []).join(', ') : '-' },
+      { label: '近期错误日志数', value: result.summary.recentErrorCount !== undefined ? String(result.summary.recentErrorCount) : '-' },
     ];
 
     linuxSummaryGrid.innerHTML = summaryEntries
@@ -671,7 +690,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const renderLinuxHighlights = (highlights: string[]): void => {
     if (highlights.length === 0) {
-      linuxHighlightsContainer.innerHTML = '<div class="empty-state">Key findings will appear here after inspection.</div>';
+      linuxHighlightsContainer.innerHTML = '<div class="empty-state">巡检完成后，这里会显示关键结论。</div>';
       return;
     }
 
@@ -687,6 +706,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const renderLinuxScoreBreakdown = (breakdown: LinuxServerScoreBreakdown[]): void => {
+    if (breakdown.length === 0) {
+      linuxScoreBreakdownContainer.innerHTML = '<div class="empty-state">当前巡检范围没有可计算的评分项。</div>';
+      return;
+    }
+
     linuxScoreBreakdownContainer.innerHTML = breakdown
       .map(
         (item) => `
@@ -701,7 +725,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const renderLinuxServiceHealth = (serviceHealth: LinuxServiceHealth[]): void => {
     if (serviceHealth.length === 0) {
-      linuxServiceHealthContainer.innerHTML = '<div class="empty-state">Service health cards will appear here after inspection.</div>';
+      linuxServiceHealthContainer.innerHTML = '<div class="empty-state">巡检完成后，这里会显示服务健康摘要。</div>';
       return;
     }
 
@@ -719,7 +743,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const renderLinuxAlerts = (alerts: LinuxServerAlert[]): void => {
     if (alerts.length === 0) {
-      linuxAlertsContainer.innerHTML = '<div class="empty-state">No warnings or critical issues were detected.</div>';
+      linuxAlertsContainer.innerHTML = '<div class="empty-state">未发现告警或严重问题。</div>';
       return;
     }
 
@@ -736,6 +760,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const renderLinuxSections = (sections: LinuxServerSection[]): void => {
+    const detailSections = sections.filter((section) => section.key !== 'summary');
+    if (detailSections.length === 0) {
+      linuxSectionsContainer.innerHTML = '<div class="empty-state">当前巡检范围没有详细输出。</div>';
+      return;
+    }
+
     linuxSectionsContainer.innerHTML = sections
       .filter((section) => section.key !== 'summary')
       .map(
@@ -855,13 +885,55 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const clearLinuxResult = (): void => {
-    linuxHighlightsContainer.innerHTML = '<div class="empty-state">Key findings will appear here after inspection.</div>';
-    linuxScoreBreakdownContainer.innerHTML = '<div class="empty-state">Score breakdown will appear here after inspection.</div>';
-    linuxServiceHealthContainer.innerHTML = '<div class="empty-state">Service health cards will appear here after inspection.</div>';
-    linuxAlertsContainer.innerHTML = '<div class="empty-state">Warnings and recommendations will appear here after inspection.</div>';
-    linuxSummaryGrid.innerHTML = '<div class="empty-state">Run an inspection to view server summary, security baseline, and certificate status.</div>';
+    linuxHighlightsContainer.innerHTML = '<div class="empty-state">巡检完成后，这里会显示关键结论。</div>';
+    linuxScoreBreakdownContainer.innerHTML = '<div class="empty-state">巡检完成后，这里会显示评分拆解。</div>';
+    linuxServiceHealthContainer.innerHTML = '<div class="empty-state">巡检完成后，这里会显示服务健康摘要。</div>';
+    linuxAlertsContainer.innerHTML = '<div class="empty-state">巡检完成后，这里会显示告警和处理建议。</div>';
+    linuxSummaryGrid.innerHTML = '<div class="empty-state">执行巡检后，这里会显示服务器摘要、安全基线和证书状态。</div>';
     linuxSectionsContainer.innerHTML = '';
     linuxLastChecked.textContent = '--';
+  };
+
+  const clearLinuxQuickActionOutput = (): void => {
+    linuxQuickActionOutput.innerHTML = '<div class="empty-state">执行快捷工具后，这里会显示命令输出。</div>';
+  };
+
+  const renderLinuxQuickActionResult = (result: LinuxQuickActionResult): void => {
+    linuxQuickActionOutput.innerHTML = `
+      <div class="result-block">
+        <div class="result-title-row">
+          <h4>${escapeHtml(result.title)}</h4>
+          <code>${escapeHtml(result.command)}</code>
+        </div>
+        <pre class="result-pre">${escapeHtml(result.output)}</pre>
+      </div>
+    `;
+  };
+
+  const readLinuxCredentials = (): LinuxServerCredentials | null => {
+    const credentials: LinuxServerCredentials = {
+      host: linuxHostInput.value.trim(),
+      port: Number(linuxPortInput.value) || 22,
+      username: linuxUsernameInput.value.trim(),
+      password: linuxPasswordInput.value,
+    };
+
+    if (!credentials.host) {
+      showStatus(linuxStatusDiv, '请输入 Linux 服务器 IP 或域名。', 'error');
+      return null;
+    }
+
+    if (!credentials.username) {
+      showStatus(linuxStatusDiv, '请输入登录用户名。', 'error');
+      return null;
+    }
+
+    if (!credentials.password) {
+      showStatus(linuxStatusDiv, '请输入登录密码。', 'error');
+      return null;
+    }
+
+    return credentials;
   };
 
   const applyArchiveRuntimeState = async (): Promise<void> => {
@@ -1003,35 +1075,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     showStatus(localStatusDiv, result.message, result.success ? 'success' : 'error');
   });
 
-  linuxInspectBtn.addEventListener('click', async () => {
-    const credentials: LinuxServerCredentials = {
-      host: linuxHostInput.value.trim(),
-      port: Number(linuxPortInput.value) || 22,
-      username: linuxUsernameInput.value.trim(),
-      password: linuxPasswordInput.value,
-    };
+  const linuxScopeLabels: Record<LinuxInspectScope, string> = {
+    full: '全量巡检',
+    basic: '基础信息',
+    resource: '资源负载',
+    network: '网络与日志',
+    runtime: '运行环境',
+    security: '安全基线',
+  };
 
-    if (!credentials.host) {
-      showStatus(linuxStatusDiv, '请输入 Linux 服务器 IP 或域名。', 'error');
-      return;
-    }
-
-    if (!credentials.username) {
-      showStatus(linuxStatusDiv, '请输入登录用户名。', 'error');
-      return;
-    }
-
-    if (!credentials.password) {
-      showStatus(linuxStatusDiv, '请输入登录密码。', 'error');
+  const runLinuxInspection = async (scope: LinuxInspectScope): Promise<void> => {
+    const credentials = readLinuxCredentials();
+    if (!credentials) {
       return;
     }
 
     linuxInspectBtn.disabled = true;
+    linuxScopeButtons.forEach((button) => {
+      button.disabled = true;
+    });
     clearLinuxResult();
-    showStatus(linuxStatusDiv, '正在连接服务器并采集 CPU、内存、磁盘、端口占用、JDK、Docker、Nginx 和证书信息...');
+    showStatus(linuxStatusDiv, `正在执行${linuxScopeLabels[scope]}...`);
 
     try {
-      const result = await window.electronAPI.inspectLinuxServer(credentials);
+      const result = await window.electronAPI.inspectLinuxServer(credentials, scope);
       renderLinuxSummary(result);
       renderLinuxHighlights(result.highlights);
       renderLinuxScoreBreakdown(result.score.breakdown);
@@ -1045,8 +1112,66 @@ document.addEventListener('DOMContentLoaded', async () => {
       showStatus(linuxStatusDiv, `巡检失败: ${(error as Error).message}`, 'error');
     } finally {
       linuxInspectBtn.disabled = false;
+      linuxScopeButtons.forEach((button) => {
+        button.disabled = false;
+      });
       linuxPasswordInput.value = '';
     }
+  };
+
+  const runLinuxQuickTool = async (action: LinuxQuickAction, runningText: string): Promise<void> => {
+    const credentials = readLinuxCredentials();
+    if (!credentials) {
+      return;
+    }
+
+    linuxInspectBtn.disabled = true;
+    linuxScopeButtons.forEach((button) => {
+      button.disabled = true;
+    });
+    linuxViewNginxConfigBtn.disabled = true;
+    linuxRestartNginxBtn.disabled = true;
+    clearLinuxQuickActionOutput();
+    showStatus(linuxQuickActionStatusDiv, runningText);
+
+    try {
+      const result = await window.electronAPI.runLinuxQuickAction(credentials, action);
+      renderLinuxQuickActionResult(result);
+      showStatus(linuxQuickActionStatusDiv, result.message, result.success ? 'success' : 'error');
+    } catch (error) {
+      clearLinuxQuickActionOutput();
+      showStatus(linuxQuickActionStatusDiv, `执行失败: ${(error as Error).message}`, 'error');
+    } finally {
+      linuxInspectBtn.disabled = false;
+      linuxScopeButtons.forEach((button) => {
+        button.disabled = false;
+      });
+      linuxViewNginxConfigBtn.disabled = false;
+      linuxRestartNginxBtn.disabled = false;
+      linuxPasswordInput.value = '';
+    }
+  };
+
+  linuxInspectBtn.addEventListener('click', async () => {
+    await runLinuxInspection('full');
+  });
+
+  linuxScopeButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const scope = button.dataset.linuxScope as LinuxInspectScope | undefined;
+      if (!scope) {
+        return;
+      }
+      await runLinuxInspection(scope);
+    });
+  });
+
+  linuxViewNginxConfigBtn.addEventListener('click', async () => {
+    await runLinuxQuickTool('nginxConfig', '正在读取 Nginx 配置内容...');
+  });
+
+  linuxRestartNginxBtn.addEventListener('click', async () => {
+    await runLinuxQuickTool('restartNginx', '正在重启 Nginx...');
   });
 
   selectFolderBtn.addEventListener('click', async () => {

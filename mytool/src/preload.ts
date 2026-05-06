@@ -144,6 +144,9 @@ type LinuxServerCredentials = {
   password: string;
 };
 
+type LinuxInspectScope = 'full' | 'basic' | 'resource' | 'network' | 'runtime' | 'security';
+type LinuxQuickAction = 'nginxConfig' | 'restartNginx';
+
 type LinuxServerSection = {
   key:
     | 'summary'
@@ -250,6 +253,16 @@ type LinuxServerInspectResult = {
   sections: LinuxServerSection[];
 };
 
+type LinuxQuickActionResult = {
+  success: boolean;
+  message: string;
+  inspectedAt: string;
+  action: LinuxQuickAction;
+  title: string;
+  command: string;
+  output: string;
+};
+
 type LocalSystemSection = {
   key: string;
   title: string;
@@ -315,8 +328,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('system:copyLocalReport', result) as Promise<SimpleResult>,
   exportLocalSystemReport: (result: LocalSystemInspectResult, format: 'txt' | 'json') =>
     ipcRenderer.invoke('system:exportLocalReport', result, format) as Promise<SimpleResult>,
-  inspectLinuxServer: (credentials: LinuxServerCredentials) =>
-    ipcRenderer.invoke('linux:inspectServer', credentials) as Promise<LinuxServerInspectResult>,
+  inspectLinuxServer: (credentials: LinuxServerCredentials, scope: LinuxInspectScope = 'full') =>
+    ipcRenderer.invoke('linux:inspectServer', credentials, scope) as Promise<LinuxServerInspectResult>,
+  runLinuxQuickAction: (credentials: LinuxServerCredentials, action: LinuxQuickAction) =>
+    ipcRenderer.invoke('linux:quickAction', credentials, action) as Promise<LinuxQuickActionResult>,
   renameFiles: (folderPath: string, searchString: string, replaceString: string) =>
     ipcRenderer.invoke('file:rename', folderPath, searchString, replaceString) as Promise<SimpleResult>,
   generateFileList: (folderPath: string) =>

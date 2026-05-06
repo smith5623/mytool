@@ -783,9 +783,26 @@
 
           <div class="button-row">
             <button id="linuxInspectBtn">开始巡检</button>
+            <button type="button" class="secondary" data-linux-scope="basic">基础信息</button>
+            <button type="button" class="secondary" data-linux-scope="resource">资源负载</button>
+            <button type="button" class="secondary" data-linux-scope="network">网络与日志</button>
+            <button type="button" class="secondary" data-linux-scope="runtime">运行环境</button>
+            <button type="button" class="secondary" data-linux-scope="security">安全基线</button>
           </div>
 
           <div id="linuxStatus" class="status-message"></div>
+        </div>
+
+        <div class="panel">
+          <h3>Nginx 快捷工具</h3>
+          <div class="button-row">
+            <button type="button" class="secondary" id="linuxViewNginxConfigBtn">查看 Nginx 配置</button>
+            <button type="button" class="secondary" id="linuxRestartNginxBtn">重启 Nginx</button>
+          </div>
+          <div id="linuxQuickActionStatus" class="status-message"></div>
+          <div id="linuxQuickActionOutput" style="margin-top: 16px;">
+            <div class="empty-state">执行快捷工具后，这里会显示命令输出。</div>
+          </div>
         </div>
 
         <div class="panel">
